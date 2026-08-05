@@ -5,7 +5,7 @@
     --glass-bg: rgba(255, 255, 255, 0.03);
     --glass-border: rgba(255, 255, 255, 0.08);
     --glass-border-strong: rgba(255, 255, 255, 0.15);
-    --accent: #7dd3fc;
+    --accent: #5e5c6a;
     --ok: #4ade80;
     --ko: #f87171;
 }
@@ -22,9 +22,6 @@ html, body {
 
 body {
     background: var(--bg);
-    background-image:
-        radial-gradient(circle at 20% 20%, rgba(125, 211, 252, 0.08), transparent 40%),
-        radial-gradient(circle at 80% 80%, rgba(167, 139, 250, 0.08), transparent 40%);
     color: var(--text);
     font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     display: flex;
@@ -97,18 +94,14 @@ body {
     border-color: rgba(74, 222, 128, 0.25);
 }
 
-.cell.locked input,
-.group.group-locked .cell:not(.solved) input {
+.cell.locked input {
     color: var(--ko);
     border-color: rgba(248, 113, 113, 0.25);
 }
 
-.cell .timer {
-    font-size: 0.7rem;
-    color: var(--ko);
-    font-variant-numeric: tabular-nums;
-    height: 12px;
-    letter-spacing: 0.05em;
+.cell.admin-locked input {
+    color: var(--muted);
+    opacity: 0.4;
 }
 
 .dot {
@@ -207,14 +200,12 @@ button:disabled {
 }
 
 .global-lock {
-    padding: 12px 20px;
+    padding: 16px 28px;
     background: var(--glass-bg);
     border: 1px solid rgba(248, 113, 113, 0.25);
     border-radius: 10px;
     color: var(--ko);
     text-align: center;
-    font-size: 0.85rem;
-    letter-spacing: 0.03em;
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     display: none;
@@ -222,6 +213,21 @@ button:disabled {
 
 .global-lock.visible {
     display: block;
+}
+
+.global-lock .label {
+    font-size: 0.75rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    opacity: 0.8;
+}
+
+.global-lock .countdown {
+    margin-top: 6px;
+    font-family: "SF Mono", "Consolas", monospace;
+    font-variant-numeric: tabular-nums;
+    font-size: 1.8rem;
+    letter-spacing: 0.08em;
 }
 
 @media (max-width: 640px) {

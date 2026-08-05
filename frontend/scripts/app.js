@@ -1,12 +1,11 @@
 const NUM_FIELDS = 8;
 const GROUPS = [[0, 1, 2, 3], [4, 5, 6, 7]];
-const GROUP_LABELS = ["latitude", "longitude"];
 
 const state = {
     fields: Array.from({ length: NUM_FIELDS }, (_, i) => ({
         id: i,
         solved: false,
-        locked_until: null,
+        locked_until: null, // uniquement les verrous admin
         value: "",
     })),
     all_solved: false,
@@ -17,7 +16,6 @@ const els = {
     coords: document.getElementById("coords"),
     status: document.getElementById("status"),
     submitBtn: document.getElementById("submit-btn"),
-    // clearBtn: document.getElementById("clear-btn"),
     actions: document.getElementById("actions"),
     copyBtn: document.getElementById("copy-btn"),
     revealBtn: document.getElementById("reveal-btn"),
@@ -52,11 +50,7 @@ function buildLayout() {
             input.addEventListener("input", onInput);
             input.addEventListener("keydown", onKey);
 
-            const timer = document.createElement("div");
-            timer.className = "timer";
-
             cell.appendChild(input);
-            cell.appendChild(timer);
             groupEl.appendChild(cell);
         });
 
@@ -99,47 +93,34 @@ function findPrevEditable(fromId) {
 }
 
 function isEditable(fid) {
-    return !state.fields[fid].solved && !isFieldLocked(fid);
+    return !state.fields[fid].solved && !isAdminLocked(fid) && !isGlobalLocked();
 }
 
-function isFieldLocked(fid) {
+function isAdminLocked(fid) {
     const lu = state.fields[fid].locked_until;
     if (!lu) return false;
     return new Date(lu).getTime() > Date.now();
+}
+
+function isGlobalLocked() {
+    return !!(state.global_locked_until && new Date(state.global_locked_until).getTime() > Date.now());
 }
 
 function isGroupSolved(gi) {
     return GROUPS[gi].every((fid) => state.fields[fid].solved);
 }
 
-function isGroupLocked(gi) {
-    return GROUPS[gi].some((fid) => !state.fields[fid].solved && isFieldLocked(fid));
-}
-
-function groupLockUntil(gi) {
-    let max = null;
-    for (const fid of GROUPS[gi]) {
-        if (state.fields[fid].solved) continue;
-        const lu = state.fields[fid].locked_until;
-        if (!lu) continue;
-        const t = new Date(lu).getTime();
-        if (t > Date.now() && (max === null || t > max)) max = t;
-    }
-    return max;
-}
-
 async function submitAll() {
-    const globalLocked = state.global_locked_until && new Date(state.global_locked_until).getTime() > Date.now();
-    if (globalLocked) return;
+    if (isGlobalLocked()) return;
 
     const payload = [];
     state.fields.forEach((f) => {
-        if (f.solved || isFieldLocked(f.id)) return;
+        if (f.solved || isAdminLocked(f.id)) return;
         const v = (f.value || "").trim();
-        if (/^\d{2}$/.test(v)) payload.push({ field_id: f.id, value: v });
+        if (/^\d{1,2}$/.test(v)) payload.push({ field_id: f.id, value: v });
     });
     if (payload.length === 0) {
-        setStatus("Rien à valider : remplis au moins un champ (2 chiffres).");
+        setStatus("Rien à valider : remplis au moins un champ.");
         return;
     }
 
@@ -156,19 +137,12 @@ async function submitAll() {
             setStatus("Erreur : " + data.error);
             return;
         }
-        if (data.global_locked) {
-            state.global_locked_until = data.global_retry_at || null;
-            render();
-            setStatus("Site temporairement verrouillé.");
-            return;
-        }
         applyBatchResult(data);
         describeBatch(data);
         if (data.all_solved) state.all_solved = true;
     } catch (err) {
         setStatus("Erreur réseau.");
     } finally {
-        els.submitBtn.disabled = false;
         render();
     }
 }
@@ -181,32 +155,26 @@ function applyBatchResult(data) {
             state.fields[fid].locked_until = null;
         }
     });
-    Object.entries(data.groups || {}).forEach(([giStr, gres]) => {
-        const gi = Number(giStr);
-        if (gres.locked && gres.retry_at) {
-            GROUPS[gi].forEach((fid) => {
-                if (!state.fields[fid].solved) state.fields[fid].locked_until = gres.retry_at;
-            });
-        }
-    });
     if (data.global_locked) state.global_locked_until = data.global_retry_at || null;
 }
 
 function describeBatch(data) {
-    const parts = [];
-    Object.entries(data.groups || {}).forEach(([giStr, gres]) => {
-        const gi = Number(giStr);
-        const label = GROUP_LABELS[gi] || `bloc ${gi}`;
-        if (gres.wrong) parts.push(`${label} : erreur, bloc verrouillé 1 h`);
-        else if (gres.locked) parts.push(`${label} : déjà verrouillé`);
-        else if (gres.correct && gres.all_solved) parts.push(`${label} : ✓ complet`);
-        else if (gres.correct) parts.push(`${label} : ✓ (partiel)`);
-    });
-    setStatus(parts.join(" · "));
+    if (data.global_locked) {
+        setStatus("Au moins une réponse fausse — site verrouillé 1 h.");
+        return;
+    }
+    if (data.all_solved) {
+        setStatus("Toutes les réponses sont correctes.");
+        return;
+    }
+    const results = data.results || {};
+    const ok = Object.values(results).filter((r) => r.correct).length;
+    if (ok > 0) setStatus(`${ok} champ${ok > 1 ? "s" : ""} validé${ok > 1 ? "s" : ""}.`);
+    else setStatus("");
 }
 
 function setStatus(msg) {
-    els.status.style.display = "block";
+    els.status.style.display = msg ? "block" : "none";
     els.status.textContent = msg;
 }
 
@@ -227,38 +195,40 @@ async function loadState() {
 }
 
 function fmtCountdown(ms) {
-    if (ms <= 0) return "";
+    if (ms <= 0) return "00:00";
     const s = Math.floor(ms / 1000);
     const m = Math.floor(s / 60);
     const sec = s % 60;
     const h = Math.floor(m / 60);
     const min = m % 60;
     if (h >= 24 * 365) return "∞";
-    if (h > 0) return `${h}h${String(min).padStart(2, "0")}`;
-    return `${min}:${String(sec).padStart(2, "0")}`;
+    const pad = (n) => String(n).padStart(2, "0");
+    if (h > 0) return `${pad(h)}:${pad(min)}:${pad(sec)}`;
+    return `${pad(min)}:${pad(sec)}`;
 }
 
 function render() {
-    const gl = state.global_locked_until && new Date(state.global_locked_until).getTime() > Date.now();
+    const gl = isGlobalLocked();
 
     state.fields.forEach((f) => {
         const cell = document.querySelector(`.cell[data-field="${f.id}"]`);
         const input = cell.querySelector("input");
-        const timer = cell.querySelector(".timer");
-        cell.classList.remove("solved", "locked");
-        timer.textContent = "";
+        cell.classList.remove("solved", "locked", "admin-locked");
 
-        const locked = isFieldLocked(f.id);
         if (f.solved) {
             cell.classList.add("solved");
             input.value = f.value || input.value || "**";
             input.disabled = true;
-        } else if (locked) {
+        } else if (isAdminLocked(f.id)) {
+            cell.classList.add("admin-locked");
+            input.disabled = true;
+            input.value = "";
+        } else if (gl) {
             cell.classList.add("locked");
             input.disabled = true;
-            timer.textContent = fmtCountdown(new Date(f.locked_until).getTime() - Date.now());
+            if (input.value !== f.value) input.value = f.value;
         } else {
-            input.disabled = !!gl;
+            input.disabled = false;
             if (input.value !== f.value) input.value = f.value;
         }
     });
@@ -266,28 +236,19 @@ function render() {
     GROUPS.forEach((_, gi) => {
         const groupEl = document.querySelector(`.group[data-group="${gi}"]`);
         groupEl.classList.toggle("revealed", isGroupSolved(gi));
-        groupEl.classList.toggle("group-locked", isGroupLocked(gi));
     });
 
-    els.globalLock.classList.toggle("visible", !!gl);
+    els.globalLock.classList.toggle("visible", gl);
     if (gl) {
-        els.globalLock.textContent = `Site verrouillé (trop d'erreurs). Réessaye dans ${fmtCountdown(new Date(state.global_locked_until).getTime() - Date.now())}.`;
+        const ms = new Date(state.global_locked_until).getTime() - Date.now();
+        els.globalLock.innerHTML = `<div class="label">Site verrouillé</div><div class="countdown">${fmtCountdown(ms)}</div>`;
         els.submitBtn.disabled = true;
     } else {
+        els.globalLock.innerHTML = "";
         els.submitBtn.disabled = false;
     }
 
     els.actions.style.display = state.all_solved ? "flex" : "none";
-}
-
-function clearInputs() {
-    state.fields.forEach((f) => {
-        if (f.solved || isFieldLocked(f.id)) return;
-        f.value = "";
-        const input = document.querySelector(`input[data-field="${f.id}"]`);
-        if (input) input.value = "";
-    });
-    setStatus("");
 }
 
 function copyCoords() {
@@ -341,7 +302,6 @@ async function reveal() {
 }
 
 els.submitBtn.addEventListener("click", submitAll);
-// els.clearBtn.addEventListener("click", clearInputs);
 els.copyBtn.addEventListener("click", copyCoords);
 els.revealBtn.addEventListener("click", reveal);
 

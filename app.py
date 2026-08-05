@@ -2,6 +2,8 @@ import hashlib
 import json
 import os
 import sqlite3
+import subprocess
+import sys
 from datetime import datetime, timedelta, timezone
 from functools import wraps
 
@@ -13,24 +15,32 @@ from flask_limiter.util import get_remote_address
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN") or None
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "data.db")
+BACKEND_DIR = os.path.join(os.path.dirname(__file__), "backend")
+DB_PATH = os.path.join(BACKEND_DIR, "data.db")
+INIT_SCRIPT = os.path.join(BACKEND_DIR, "init_db.py")
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "frontend")
+
+
+def ensure_db() -> None:
+    if os.path.exists(DB_PATH):
+        return
+    if not os.path.exists(INIT_SCRIPT):
+        raise SystemExit(f"{INIT_SCRIPT} introuvable, impossible d'initialiser la base.")
+    print(f"{DB_PATH} absent → exécution de init_db.py…", flush=True)
+    subprocess.check_call([sys.executable, INIT_SCRIPT], cwd=BACKEND_DIR)
+
+
+ensure_db()
 
 NUM_FIELDS = 8
 GROUPS = [[0, 1, 2, 3], [4, 5, 6, 7]]
 LOCK_DURATION = timedelta(hours=1)
 PERMANENT_LOCK = "9999-12-31T00:00:00+00:00"
 
-# Verrou global : N groupes différents mal validés en WINDOW bloquent tout le site.
-GLOBAL_LOCK_ERROR_THRESHOLD = 3
-GLOBAL_LOCK_WINDOW = timedelta(minutes=10)
-GLOBAL_LOCK_DURATION = timedelta(hours=1)
-
 app = Flask(__name__, static_folder=STATIC_DIR, static_url_path="")
 
 limiter = Limiter(get_remote_address, app=app, default_limits=["60 per minute"])
 
-_recent_group_errors: list[tuple[int, datetime]] = []
 _global_locked_until: datetime | None = None
 
 
@@ -51,13 +61,6 @@ def parse_iso(s: str | None) -> datetime | None:
     return dt
 
 
-def group_of(field_id: int) -> int:
-    for gi, ids in enumerate(GROUPS):
-        if field_id in ids:
-            return gi
-    raise ValueError(field_id)
-
-
 def get_db() -> sqlite3.Connection:
     if "db" not in g:
         conn = sqlite3.connect(DB_PATH)
@@ -72,20 +75,6 @@ def close_db(_exc: BaseException | None) -> None:
     db = g.pop("db", None)
     if db is not None:
         db.close()
-
-
-def register_group_error(group_id: int) -> datetime | None:
-    """Enregistre une erreur au niveau du groupe et retourne l'échéance de verrou global si atteinte."""
-    global _global_locked_until
-    now = now_utc()
-    _recent_group_errors.append((group_id, now))
-    cutoff = now - GLOBAL_LOCK_WINDOW
-    _recent_group_errors[:] = [(g_, t) for g_, t in _recent_group_errors if t >= cutoff]
-    if len(_recent_group_errors) >= GLOBAL_LOCK_ERROR_THRESHOLD:
-        _global_locked_until = now + GLOBAL_LOCK_DURATION
-        _recent_group_errors.clear()
-        return _global_locked_until
-    return None
 
 
 def global_lock_active() -> datetime | None:
@@ -118,6 +107,11 @@ def index():
     return send_from_directory(STATIC_DIR, "index.html")
 
 
+@app.get("/admin")
+def admin_page():
+    return send_from_directory(STATIC_DIR, "admin.html")
+
+
 @app.get("/api/state")
 @limiter.limit("30 per minute")
 def api_state():
@@ -145,12 +139,11 @@ def api_state():
 @limiter.limit("15 per minute")
 def api_check():
     """
-    Batch. Body : {"fields": [{"field_id": int, "value": "XX"}, ...]}
-    Validation par groupe :
-      - une ou plusieurs erreurs dans un groupe → tous les champs non résolus du groupe locked 1h.
-      - toutes les valeurs soumises correctes → celles-ci passent solved.
-      - champ déjà solved / locked : ignoré silencieusement dans le batch.
+    Batch. Body : {"fields": [{"field_id": int, "value": "X" | "XX"}, ...]}
+    Une seule erreur dans le batch → verrou global 1h.
+    Champs déjà solved ou verrouillés (admin) → ignorés silencieusement.
     """
+    global _global_locked_until
     payload = request.get_json(silent=True) or {}
     submissions = payload.get("fields")
     if not isinstance(submissions, list) or not submissions:
@@ -168,94 +161,52 @@ def api_check():
         val = entry.get("value")
         if not isinstance(fid, int) or not 0 <= fid < NUM_FIELDS:
             return jsonify({"error": f"invalid field_id: {fid}"}), 400
-        if not isinstance(val, str) or len(val) != 2 or not val.isdigit():
+        if not isinstance(val, str) or len(val) not in (1, 2) or not val.isdigit():
             return jsonify({"error": f"invalid value for field {fid}"}), 400
-        cleaned[fid] = val  # dernière soumission gagne pour un même id
+        cleaned[fid] = val.zfill(2)
 
     db = get_db()
     fields = _load_fields(db)
     now = now_utc()
 
-    per_group: dict[int, list[int]] = {gi: [] for gi in range(len(GROUPS))}
-    for fid in cleaned:
-        per_group[group_of(fid)].append(fid)
+    results: dict[int, dict] = {}
+    correct_ids: list[int] = []
+    wrong = False
 
-    field_results: dict[int, dict] = {}
-    group_results: dict[int, dict] = {}
-    global_lock_triggered: datetime | None = None
-
-    for gi, submitted_ids in per_group.items():
-        if not submitted_ids:
+    for fid, val in cleaned.items():
+        f = fields[fid]
+        if f["solved"]:
+            results[fid] = {"correct": True, "already_solved": True}
             continue
-
-        # Groupe déjà verrouillé (au moins un champ non-solved locked in the future) → on refuse tout.
-        group_locked_until: datetime | None = None
-        for fid in GROUPS[gi]:
-            f = fields[fid]
-            if f["solved"]:
-                continue
-            lu = parse_iso(f["locked_until"])
-            if lu and lu > now:
-                if group_locked_until is None or lu > group_locked_until:
-                    group_locked_until = lu
-        if group_locked_until is not None:
-            group_results[gi] = {"locked": True, "retry_at": iso(group_locked_until)}
-            for fid in submitted_ids:
-                field_results[fid] = {"skipped": True, "reason": "group_locked"}
+        lu = parse_iso(f["locked_until"])
+        if lu and lu > now:
+            results[fid] = {"skipped": True, "reason": "admin_locked"}
             continue
-
-        # Évalue chaque champ soumis sans encore rien écrire.
-        correct_ids: list[int] = []
-        wrong = False
-        for fid in submitted_ids:
-            f = fields[fid]
-            if f["solved"]:
-                field_results[fid] = {"correct": True, "already_solved": True}
-                continue
-            candidate = hashlib.sha256((f["salt"] + cleaned[fid]).encode("utf-8")).hexdigest()
-            if candidate == f["hash"]:
-                correct_ids.append(fid)
-                field_results[fid] = {"correct": True}
-            else:
-                wrong = True
-                field_results[fid] = {"correct": False}
-
-        if wrong:
-            # Verrouille TOUS les champs non-solved du groupe (spec : une erreur → tout le groupe).
-            new_lock = now + LOCK_DURATION
-            to_lock = [fid for fid in GROUPS[gi] if not fields[fid]["solved"]]
-            db.executemany(
-                "UPDATE fields SET locked_until = ? WHERE id = ?",
-                [(iso(new_lock), fid) for fid in to_lock],
-            )
-            for fid in to_lock:
-                fields[fid]["locked_until"] = iso(new_lock)
-            group_results[gi] = {"locked": True, "retry_at": iso(new_lock), "wrong": True}
-            triggered = register_group_error(gi)
-            if triggered:
-                global_lock_triggered = triggered
+        candidate = hashlib.sha256((f["salt"] + val).encode("utf-8")).hexdigest()
+        if candidate == f["hash"]:
+            correct_ids.append(fid)
+            results[fid] = {"correct": True}
         else:
-            if correct_ids:
-                db.executemany(
-                    "UPDATE fields SET solved = 1, locked_until = NULL WHERE id = ?",
-                    [(fid,) for fid in correct_ids],
-                )
-                for fid in correct_ids:
-                    fields[fid]["solved"] = True
-                    fields[fid]["locked_until"] = None
-            group_fully_solved = all(fields[fid]["solved"] for fid in GROUPS[gi])
-            group_results[gi] = {"correct": True, "all_solved": group_fully_solved}
+            wrong = True
+            results[fid] = {"correct": False}
 
-    db.commit()
+    response: dict = {"results": results}
 
-    response = {
-        "results": field_results,
-        "groups": group_results,
-        "all_solved": _all_solved(db),
-    }
-    if global_lock_triggered:
+    if wrong:
+        _global_locked_until = now + LOCK_DURATION
         response["global_locked"] = True
-        response["global_retry_at"] = iso(global_lock_triggered)
+        response["global_retry_at"] = iso(_global_locked_until)
+        response["all_solved"] = _all_solved(db)
+        return jsonify(response)
+
+    if correct_ids:
+        db.executemany(
+            "UPDATE fields SET solved = 1, locked_until = NULL WHERE id = ?",
+            [(fid,) for fid in correct_ids],
+        )
+        db.commit()
+
+    response["all_solved"] = _all_solved(db)
     return jsonify(response)
 
 
@@ -294,6 +245,34 @@ def _validate_ids(raw) -> list[int] | tuple[dict, int]:
             return {"error": f"invalid field_id: {x}"}, 400
         out.append(x)
     return out
+
+
+@app.get("/api/admin/state")
+@limiter.limit("60 per minute")
+@require_admin
+def api_admin_state():
+    """Retourne l'état complet des champs (locked_until brut, sans masquage temporel)."""
+    db = get_db()
+    rows = db.execute("SELECT id, solved, locked_until FROM fields ORDER BY id").fetchall()
+    fields = []
+    for r in rows:
+        lu = r["locked_until"]
+        fields.append(
+            {
+                "id": r["id"],
+                "solved": bool(r["solved"]),
+                "locked_until": lu,
+                "permanent": lu == PERMANENT_LOCK,
+            }
+        )
+    gl = global_lock_active()
+    return jsonify(
+        {
+            "fields": fields,
+            "all_solved": all(f["solved"] for f in fields),
+            "global_locked_until": iso(gl),
+        }
+    )
 
 
 @app.post("/api/admin/lock")
@@ -343,6 +322,4 @@ def api_admin_unlock():
 
 
 if __name__ == "__main__":
-    if not os.path.exists(DB_PATH):
-        raise SystemExit(f"{DB_PATH} manquant. Lance d'abord : python init_db.py")
     app.run(host="127.0.0.1", port=5000, debug=False)

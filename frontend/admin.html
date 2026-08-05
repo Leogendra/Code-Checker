@@ -1,0 +1,332 @@
+<!doctype html>
+<html lang="fr">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Admin</title>
+    <link rel="icon" type="image/png" href="favicon.png" />
+    <link rel="stylesheet" href="css/style.css" />
+    <style>
+        .admin {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+            width: min(560px, 100%);
+        }
+
+        .admin h1 {
+            margin: 0;
+            font-size: 0.9rem;
+            font-weight: 500;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            color: var(--muted);
+            text-align: center;
+        }
+
+        .login {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .login input {
+            width: 260px;
+            height: 44px;
+            padding: 0 14px;
+            background: var(--glass-bg);
+            color: var(--text);
+            border: 1px solid var(--glass-border);
+            border-radius: 10px;
+            font-size: 0.95rem;
+            outline: none;
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .login input:focus {
+            border-color: var(--glass-border-strong);
+            background: rgba(255, 255, 255, 0.05);
+            box-shadow: 0 0 0 3px rgba(125, 211, 252, 0.08);
+        }
+
+        .rows {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .row {
+            display: grid;
+            grid-template-columns: 32px 1fr auto auto;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 14px;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 10px;
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+
+        .row .fid {
+            font-family: "SF Mono", "Consolas", monospace;
+            color: var(--muted);
+            font-size: 0.85rem;
+        }
+
+        .row .status {
+            font-size: 0.8rem;
+            color: var(--muted);
+            letter-spacing: 0.03em;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .row.solved .status {
+            color: var(--ok);
+        }
+
+        .row.locked .status {
+            color: var(--ko);
+        }
+
+        .row button {
+            padding: 8px 14px;
+            font-size: 0.7rem;
+            letter-spacing: 0.1em;
+            min-width: 90px;
+        }
+
+        .bulk {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .msg {
+            text-align: center;
+            font-size: 0.8rem;
+            color: var(--muted);
+            min-height: 16px;
+            letter-spacing: 0.03em;
+        }
+
+        .msg.err {
+            color: var(--ko);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="admin">
+        <h1>Admin</h1>
+
+        <div id="login" class="login">
+            <input id="pwd" type="password" placeholder="mot de passe" autocomplete="off" />
+            <button id="login-btn">Entrer</button>
+            <div id="login-msg" class="msg"></div>
+        </div>
+
+        <div id="panel" style="display:none; flex-direction:column; gap:24px;">
+            <div class="bulk">
+                <button id="lock-all">Tout verrouiller</button>
+                <button id="unlock-all">Tout déverrouiller</button>
+                <button id="refresh">Rafraîchir</button>
+            </div>
+            <div id="rows" class="rows"></div>
+            <div id="msg" class="msg"></div>
+        </div>
+    </div>
+
+    <script>
+        const NUM_FIELDS = 8;
+        const PERMANENT_LOCK = "9999-12-31T00:00:00+00:00";
+
+        const els = {
+            login: document.getElementById("login"),
+            pwd: document.getElementById("pwd"),
+            loginBtn: document.getElementById("login-btn"),
+            loginMsg: document.getElementById("login-msg"),
+            panel: document.getElementById("panel"),
+            rows: document.getElementById("rows"),
+            msg: document.getElementById("msg"),
+            lockAll: document.getElementById("lock-all"),
+            unlockAll: document.getElementById("unlock-all"),
+            refresh: document.getElementById("refresh"),
+        };
+
+        function getToken() {
+            return sessionStorage.getItem("admin_token") || "";
+        }
+
+        function setToken(t) {
+            if (t) sessionStorage.setItem("admin_token", t);
+            else sessionStorage.removeItem("admin_token");
+        }
+
+        async function api(method, path, body) {
+            const opts = {
+                method,
+                headers: { "X-Admin-Token": getToken() },
+            };
+            if (body !== undefined) {
+                opts.headers["Content-Type"] = "application/json";
+                opts.body = JSON.stringify(body);
+            }
+            const r = await fetch(path, opts);
+            if (r.status === 401) {
+                setToken("");
+                showLogin("Mot de passe incorrect.");
+                throw new Error("unauthorized");
+            }
+            if (!r.ok) {
+                const t = await r.text();
+                throw new Error(t || r.statusText);
+            }
+            return r.json();
+        }
+
+        function showLogin(msg) {
+            els.panel.style.display = "none";
+            els.login.style.display = "flex";
+            els.loginMsg.textContent = msg || "";
+            els.loginMsg.classList.toggle("err", !!msg);
+            els.pwd.focus();
+        }
+
+        function showPanel() {
+            els.login.style.display = "none";
+            els.panel.style.display = "flex";
+        }
+
+        function setMsg(text, isErr) {
+            els.msg.textContent = text || "";
+            els.msg.classList.toggle("err", !!isErr);
+        }
+
+        function formatLock(f) {
+            if (f.solved) return "résolu";
+            if (!f.locked_until) return "libre";
+            if (f.permanent || f.locked_until === PERMANENT_LOCK) return "verrouillé (permanent)";
+            const t = new Date(f.locked_until).getTime();
+            const now = Date.now();
+            if (t <= now) return "libre";
+            const s = Math.floor((t - now) / 1000);
+            const h = Math.floor(s / 3600);
+            const m = Math.floor((s % 3600) / 60);
+            const sec = s % 60;
+            const pad = (n) => String(n).padStart(2, "0");
+            const cd = h > 0 ? `${h}h${pad(m)}` : `${m}:${pad(sec)}`;
+            return `verrouillé (${cd})`;
+        }
+
+        function renderRows(data) {
+            els.rows.innerHTML = "";
+            data.fields.forEach((f) => {
+                const row = document.createElement("div");
+                row.className = "row";
+                if (f.solved) row.classList.add("solved");
+                else if (f.locked_until) {
+                    const t = new Date(f.locked_until).getTime();
+                    if (f.permanent || t > Date.now()) row.classList.add("locked");
+                }
+
+                const fid = document.createElement("div");
+                fid.className = "fid";
+                fid.textContent = "#" + f.id;
+
+                const status = document.createElement("div");
+                status.className = "status";
+                status.textContent = formatLock(f);
+
+                const lockBtn = document.createElement("button");
+                lockBtn.textContent = "Lock";
+                lockBtn.disabled = f.solved;
+                lockBtn.addEventListener("click", () => lockFields([f.id]));
+
+                const unlockBtn = document.createElement("button");
+                unlockBtn.textContent = "Unlock";
+                unlockBtn.disabled = f.solved || !f.locked_until;
+                unlockBtn.addEventListener("click", () => unlockFields([f.id]));
+
+                row.append(fid, status, lockBtn, unlockBtn);
+                els.rows.appendChild(row);
+            });
+        }
+
+        async function refresh() {
+            try {
+                const data = await api("GET", "/api/admin/state");
+                renderRows(data);
+                setMsg("");
+            } catch (e) {
+                if (e.message !== "unauthorized") setMsg("Erreur : " + e.message, true);
+            }
+        }
+
+        async function lockFields(ids) {
+            try {
+                await api("POST", "/api/admin/lock", { field_ids: ids, hours: null });
+                setMsg(`Verrouillé : ${ids.join(", ")}`);
+                await refresh();
+            } catch (e) {
+                if (e.message !== "unauthorized") setMsg("Erreur : " + e.message, true);
+            }
+        }
+
+        async function unlockFields(ids) {
+            try {
+                await api("POST", "/api/admin/unlock", { field_ids: ids });
+                setMsg(`Déverrouillé : ${ids.join(", ")}`);
+                await refresh();
+            } catch (e) {
+                if (e.message !== "unauthorized") setMsg("Erreur : " + e.message, true);
+            }
+        }
+
+        async function login() {
+            const t = els.pwd.value.trim();
+            if (!t) return;
+            setToken(t);
+            try {
+                await api("GET", "/api/admin/state");
+                els.pwd.value = "";
+                els.loginMsg.textContent = "";
+                showPanel();
+                await refresh();
+            } catch (e) {
+                // showLogin déjà appelée si 401
+                if (e.message !== "unauthorized") {
+                    setToken("");
+                    showLogin("Erreur : " + e.message);
+                }
+            }
+        }
+
+        els.loginBtn.addEventListener("click", login);
+        els.pwd.addEventListener("keydown", (e) => { if (e.key === "Enter") login(); });
+        els.lockAll.addEventListener("click", () => lockFields([...Array(NUM_FIELDS).keys()]));
+        els.unlockAll.addEventListener("click", () => unlockFields([...Array(NUM_FIELDS).keys()]));
+        els.refresh.addEventListener("click", refresh);
+
+        if (getToken()) {
+            api("GET", "/api/admin/state").then(
+                (data) => { showPanel(); renderRows(data); },
+                () => { /* showLogin déjà appelée si 401 */ }
+            );
+        } else {
+            showLogin();
+        }
+
+        setInterval(() => {
+            if (els.panel.style.display !== "none") refresh();
+        }, 15000);
+    </script>
+</body>
+
+</html>

@@ -23,8 +23,6 @@ ANSWER = "43.144385,2.993759"  # coords with format "lat,lon" (with decimals)
 ANSWER_PIECES = []
 for part in ANSWER.split(","):
     part1, part2 = part.split(".")
-    if len(part1) == 1:
-        part1 = "0" + part1
     ANSWER_PIECES.append(part1)
     ANSWER_PIECES.append(part2[:2])
     ANSWER_PIECES.append(part2[2:4])
@@ -64,8 +62,8 @@ def seed(conn: sqlite3.Connection) -> None:
     if len(ANSWER_PIECES) != 8:
         raise ValueError("ANSWER_PIECES doit contenir exactement 8 valeurs.")
     for idx, value in enumerate(ANSWER_PIECES):
-        if not isinstance(value, str) or len(value) != 2 or not value.isdigit():
-            raise ValueError(f"ANSWER_PIECES[{idx}] doit être une chaîne de 2 chiffres, reçu : {value!r}")
+        if not isinstance(value, str) or not value.isdigit():
+            raise ValueError(f"ANSWER_PIECES[{idx}] doit être une chaîne de 1 à 2 chiffres, reçu : {value!r}")
         salt = secrets.token_hex(16)
         conn.execute(
             "INSERT INTO fields (id, salt, hash, solved, locked_until) VALUES (?, ?, ?, 0, NULL)",
