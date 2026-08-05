@@ -4,39 +4,31 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Coords finder</title>
-    <link rel="stylesheet" href="/css/style.css" />
+    <title>Mystery anniversaire</title>
+    <link rel="icon" type="image/png" href="favicon.png" />
+    <link rel="stylesheet" href="css/style.css" />
 </head>
 
 <body>
-    <main>
-        <h1>Coords finder</h1>
-        <p class="lead">
-            Remplis les cases puis clique <strong>Valider</strong>.
-            Chaque bloc (latitude, longitude) est vérifié d'un coup : une seule erreur verrouille
-            tout le bloc pendant 1 h. Un bloc correct passe au vert.
-        </p>
+    <div class="board">
+        <div class="coords" id="coords"></div>
 
-        <div class="board">
-            <div class="coords" id="coords"></div>
+        <div id="global-lock" class="global-lock"></div>
+        <div id="status"></div>
 
-            <div id="global-lock" class="global-lock"></div>
-            <div id="status"></div>
-
-            <div class="submit-row">
-                <button id="submit-btn">Valider</button>
-                <button id="clear-btn" class="secondary">Effacer</button>
-            </div>
-
-            <div class="actions" id="actions" style="display:none">
-                <button id="copy-btn" class="secondary">Copier les coordonnées</button>
-                <button id="reveal-btn">Révéler le lieu</button>
-            </div>
-            <div id="final" class="final"></div>
+        <div class="submit-row">
+            <button id="submit-btn">Valider</button>
+            <!-- <button id="clear-btn" class="secondary">Effacer</button> -->
         </div>
-    </main>
 
-    <script src="/scripts/app.js"></script>
+        <div class="actions" id="actions" style="display:none">
+            <button id="copy-btn" class="secondary">Copier les coordonnées</button>
+            <button id="reveal-btn">Révéler le lieu</button>
+        </div>
+        <div id="final" class="final"></div>
+    </div>
+
+    <script src="scripts/app.js"></script>
 </body>
 
 </html>
