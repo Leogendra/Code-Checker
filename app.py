@@ -1,14 +1,14 @@
 import hashlib
 import json
 import os
-import sqlite3
 import subprocess
 import sys
+import threading
 from datetime import datetime, timedelta, timezone
 from functools import wraps
 
 from dotenv import load_dotenv
-from flask import Flask, g, jsonify, request, send_from_directory
+from flask import Flask, jsonify, request, send_from_directory
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
@@ -16,34 +16,21 @@ load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN") or None
 
 BACKEND_DIR = os.path.join(os.path.dirname(__file__), "backend")
-DB_PATH = os.path.join(BACKEND_DIR, "data.db")
-INIT_SCRIPT = os.path.join(BACKEND_DIR, "init_db.py")
+DATA_PATH = os.path.join(BACKEND_DIR, "data.json")
+INIT_SCRIPT = os.path.join(BACKEND_DIR, "init_data.py")
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "frontend")
 
 
-def ensure_db() -> None:
-    if os.path.exists(DB_PATH):
+def ensure_data() -> None:
+    if os.path.exists(DATA_PATH):
         return
     if not os.path.exists(INIT_SCRIPT):
-        raise SystemExit(f"{INIT_SCRIPT} introuvable, impossible d'initialiser la base.")
-    print(f"{DB_PATH} absent → exécution de init_db.py…", flush=True)
+        raise SystemExit(f"{INIT_SCRIPT} introuvable, impossible d'initialiser les données.")
+    print(f"{DATA_PATH} absent, running init_data.py...", flush=True)
     subprocess.check_call([sys.executable, INIT_SCRIPT], cwd=BACKEND_DIR)
 
 
-def migrate_db() -> None:
-    """Ajoute la colonne `value` si absente (stocke la valeur en clair après résolution)."""
-    conn = sqlite3.connect(DB_PATH)
-    try:
-        cols = {r[1] for r in conn.execute("PRAGMA table_info(fields)").fetchall()}
-        if "value" not in cols:
-            conn.execute("ALTER TABLE fields ADD COLUMN value TEXT")
-            conn.commit()
-    finally:
-        conn.close()
-
-
-ensure_db()
-migrate_db()
+ensure_data()
 
 NUM_FIELDS = 8
 GROUPS = [[0, 1, 2, 3], [4, 5, 6, 7]]
@@ -51,9 +38,9 @@ LOCK_DURATION = timedelta(hours=1)
 PERMANENT_LOCK = "9999-12-31T00:00:00+00:00"
 
 app = Flask(__name__, static_folder=STATIC_DIR, static_url_path="")
-
 limiter = Limiter(get_remote_address, app=app, default_limits=["60 per minute"])
 
+_data_lock = threading.Lock()
 _global_locked_until: datetime | None = None
 
 
@@ -74,46 +61,22 @@ def parse_iso(s: str | None) -> datetime | None:
     return dt
 
 
-def get_db() -> sqlite3.Connection:
-    if "db" not in g:
-        conn = sqlite3.connect(DB_PATH)
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA foreign_keys = ON")
-        g.db = conn
-    return g.db
+def load_data() -> dict:
+    with open(DATA_PATH, "r", encoding="utf-8") as f:
+        return json.load(f)
 
 
-@app.teardown_appcontext
-def close_db(_exc: BaseException | None) -> None:
-    db = g.pop("db", None)
-    if db is not None:
-        db.close()
+def save_data(data: dict) -> None:
+    tmp = DATA_PATH + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, DATA_PATH)
 
 
 def global_lock_active() -> datetime | None:
     if _global_locked_until and _global_locked_until > now_utc():
         return _global_locked_until
     return None
-
-
-def _all_solved(db: sqlite3.Connection) -> bool:
-    row = db.execute("SELECT COUNT(*) AS c FROM fields WHERE solved = 1").fetchone()
-    return row["c"] == NUM_FIELDS
-
-
-def _load_fields(db: sqlite3.Connection) -> dict[int, dict]:
-    rows = db.execute("SELECT id, salt, hash, solved, locked_until, value FROM fields ORDER BY id").fetchall()
-    return {
-        r["id"]: {
-            "id": r["id"],
-            "salt": r["salt"],
-            "hash": r["hash"],
-            "solved": bool(r["solved"]),
-            "locked_until": r["locked_until"],
-            "value": r["value"],
-        }
-        for r in rows
-    }
 
 
 @app.get("/")
@@ -129,17 +92,17 @@ def admin_page():
 @app.get("/api/state")
 @limiter.limit("30 per minute")
 def api_state():
-    db = get_db()
-    fields_raw = _load_fields(db)
+    with _data_lock:
+        data = load_data()
     now = now_utc()
     fields = []
     for fid in range(NUM_FIELDS):
-        f = fields_raw[fid]
-        lu = parse_iso(f["locked_until"])
+        f = data["fields"][fid]
+        lu = parse_iso(f.get("locked_until"))
         if lu and lu <= now:
             lu = None
         entry = {"id": fid, "solved": f["solved"], "locked_until": iso(lu)}
-        if f["solved"] and f["value"]:
+        if f["solved"] and f.get("value"):
             entry["value"] = f["value"]
         fields.append(entry)
     return jsonify(
@@ -182,61 +145,62 @@ def api_check():
             return jsonify({"error": f"invalid value for field {fid}"}), 400
         cleaned[fid] = val.zfill(2)
 
-    db = get_db()
-    fields = _load_fields(db)
-    now = now_utc()
+    with _data_lock:
+        data = load_data()
+        now = now_utc()
 
-    results: dict[int, dict] = {}
-    correct_ids: list[int] = []
-    wrong = False
+        results: dict[int, dict] = {}
+        correct_ids: list[int] = []
+        wrong = False
 
-    for fid, val in cleaned.items():
-        f = fields[fid]
-        if f["solved"]:
-            results[fid] = {"correct": True, "already_solved": True}
-            continue
-        lu = parse_iso(f["locked_until"])
-        if lu and lu > now:
-            results[fid] = {"skipped": True, "reason": "admin_locked"}
-            continue
-        candidate = hashlib.sha256((f["salt"] + val).encode("utf-8")).hexdigest()
-        if candidate == f["hash"]:
-            correct_ids.append(fid)
-            results[fid] = {"correct": True}
-        else:
-            wrong = True
-            results[fid] = {"correct": False}
+        for fid, val in cleaned.items():
+            f = data["fields"][fid]
+            if f["solved"]:
+                results[fid] = {"correct": True, "already_solved": True}
+                continue
+            lu = parse_iso(f.get("locked_until"))
+            if lu and lu > now:
+                results[fid] = {"skipped": True, "reason": "admin_locked"}
+                continue
+            candidate = hashlib.sha256((f["salt"] + val).encode("utf-8")).hexdigest()
+            if candidate == f["hash"]:
+                correct_ids.append(fid)
+                results[fid] = {"correct": True}
+            else:
+                wrong = True
+                results[fid] = {"correct": False}
 
-    response: dict = {"results": results}
+        response: dict = {"results": results}
 
-    if wrong:
-        _global_locked_until = now + LOCK_DURATION
-        response["global_locked"] = True
-        response["global_retry_at"] = iso(_global_locked_until)
-        response["all_solved"] = _all_solved(db)
+        if wrong:
+            _global_locked_until = now + LOCK_DURATION
+            response["global_locked"] = True
+            response["global_retry_at"] = iso(_global_locked_until)
+            response["all_solved"] = all(x["solved"] for x in data["fields"])
+            return jsonify(response)
+
+        if correct_ids:
+            for fid in correct_ids:
+                data["fields"][fid]["solved"] = True
+                data["fields"][fid]["locked_until"] = None
+                data["fields"][fid]["value"] = cleaned[fid]
+            save_data(data)
+
+        response["all_solved"] = all(x["solved"] for x in data["fields"])
         return jsonify(response)
-
-    if correct_ids:
-        db.executemany(
-            "UPDATE fields SET solved = 1, locked_until = NULL, value = ? WHERE id = ?",
-            [(cleaned[fid], fid) for fid in correct_ids],
-        )
-        db.commit()
-
-    response["all_solved"] = _all_solved(db)
-    return jsonify(response)
 
 
 @app.get("/api/reveal")
 @limiter.limit("10 per minute")
 def api_reveal():
-    db = get_db()
-    if not _all_solved(db):
+    with _data_lock:
+        data = load_data()
+    if not all(f["solved"] for f in data["fields"]):
         return jsonify({"error": "not all solved"}), 403
-    row = db.execute("SELECT message FROM final WHERE id = 1").fetchone()
-    if row is None:
+    final = data.get("final")
+    if not final:
         return jsonify({"error": "no final message"}), 500
-    return jsonify(json.loads(row["message"]))
+    return jsonify(final)
 
 
 # ---------- admin ----------
@@ -269,15 +233,16 @@ def _validate_ids(raw) -> list[int] | tuple[dict, int]:
 @require_admin
 def api_admin_state():
     """Retourne l'état complet des champs (locked_until brut, sans masquage temporel)."""
-    db = get_db()
-    rows = db.execute("SELECT id, solved, locked_until FROM fields ORDER BY id").fetchall()
+    with _data_lock:
+        data = load_data()
     fields = []
-    for r in rows:
-        lu = r["locked_until"]
+    for fid in range(NUM_FIELDS):
+        f = data["fields"][fid]
+        lu = f.get("locked_until")
         fields.append(
             {
-                "id": r["id"],
-                "solved": bool(r["solved"]),
+                "id": fid,
+                "solved": f["solved"],
                 "locked_until": lu,
                 "permanent": lu == PERMANENT_LOCK,
             }
@@ -317,9 +282,11 @@ def api_admin_lock():
             return jsonify({"error": "hours must be > 0"}), 400
         until_iso = iso(now_utc() + timedelta(hours=hours))
 
-    db = get_db()
-    db.executemany("UPDATE fields SET locked_until = ? WHERE id = ?", [(until_iso, fid) for fid in ids])
-    db.commit()
+    with _data_lock:
+        data = load_data()
+        for fid in ids:
+            data["fields"][fid]["locked_until"] = until_iso
+        save_data(data)
     return jsonify({"locked": ids, "until": until_iso})
 
 
@@ -332,9 +299,11 @@ def api_admin_unlock():
     ids = _validate_ids(payload.get("field_ids"))
     if isinstance(ids, tuple):
         return jsonify(ids[0]), ids[1]
-    db = get_db()
-    db.executemany("UPDATE fields SET locked_until = NULL WHERE id = ?", [(fid,) for fid in ids])
-    db.commit()
+    with _data_lock:
+        data = load_data()
+        for fid in ids:
+            data["fields"][fid]["locked_until"] = None
+        save_data(data)
     return jsonify({"unlocked": ids})
 
 

@@ -124,7 +124,6 @@ async function submitAll() {
         return;
     }
 
-    setStatus("Vérification…");
     els.submitBtn.disabled = true;
     try {
         const r = await fetch("/api/check", {
@@ -205,17 +204,21 @@ function render() {
 
         if (f.solved) {
             cell.classList.add("solved");
-            input.value = f.value || input.value || "**";
-            input.disabled = true;
+            input.value = f.value || "";
+            input.readOnly = true;
+            input.disabled = false;
         } else if (isAdminLocked(f.id)) {
             cell.classList.add("admin-locked");
+            input.readOnly = false;
             input.disabled = true;
             input.value = "";
         } else if (gl) {
             cell.classList.add("locked");
+            input.readOnly = false;
             input.disabled = true;
             if (input.value !== f.value) input.value = f.value;
         } else {
+            input.readOnly = false;
             input.disabled = false;
             if (input.value !== f.value) input.value = f.value;
         }

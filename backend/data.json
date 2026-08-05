@@ -1,0 +1,65 @@
+{
+  "fields": [
+    {
+      "salt": "5021efc5b38e8fc08fea915972414fde",
+      "hash": "3c4ee6a4807eb89073ef2f47af52d53dde686ab8035be5767cafc18d51bd5ad8",
+      "solved": false,
+      "locked_until": null,
+      "value": null
+    },
+    {
+      "salt": "1dc5cb92454081935777ba64af851cbf",
+      "hash": "443a3ac9e812158ab6d1990d9a8aa8800b8ef0098db76a33e54fa96a15c601ea",
+      "solved": false,
+      "locked_until": null,
+      "value": null
+    },
+    {
+      "salt": "9cec80883967fa7bc5067803c8b344b0",
+      "hash": "65436f2fe4a7ff6b510a3dbfb7894fb4e419ce089b2e3f6e07b22864f3a5fced",
+      "solved": false,
+      "locked_until": null,
+      "value": null
+    },
+    {
+      "salt": "cce946a840facce0fee4e74c7f2f8fde",
+      "hash": "7055f9c1e1c5af57be1b1fed82820f5dede83c9ded91578caeeb8679ec7de4a0",
+      "solved": false,
+      "locked_until": null,
+      "value": null
+    },
+    {
+      "salt": "88064c1db1c3fbc18bc74e56ace4c769",
+      "hash": "504ad8ca3b290bfe502f357302f27550c3bc4b08f6698f5b82b3ca50b197ae04",
+      "solved": false,
+      "locked_until": null,
+      "value": null
+    },
+    {
+      "salt": "e52f3ad05faf6c8dec1cbfb63c7c8541",
+      "hash": "45b17c9a0fb450495cd7942692b7d37cc9d99af57fdc3af376871f840b6fa2bd",
+      "solved": false,
+      "locked_until": null,
+      "value": null
+    },
+    {
+      "salt": "ccc812d1977e21d8420730fdd7db617b",
+      "hash": "d045e92ffba1d4e97cdfa8c7a7fc021926b116205d9628b6eaf842bd703c8afa",
+      "solved": false,
+      "locked_until": null,
+      "value": null
+    },
+    {
+      "salt": "9980249ad380391abbc2387a4a58afcf",
+      "hash": "edfc561a85033875083dc664fc9113114eb388eda59918efb01300fb2833b0dc",
+      "solved": false,
+      "locked_until": null,
+      "value": null
+    }
+  ],
+  "final": {
+    "coords": "43.174385,2.993759",
+    "maps_url": "https://www.google.com/maps/?q=43.174385,2.993759",
+    "note": "Bravo? Tu as trouvé les coordonnées de la Tour Eiffel !"
+  }
+}

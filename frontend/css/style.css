@@ -116,16 +116,20 @@ body {
     box-shadow: 0 0 0 3px rgba(125, 211, 252, 0.08);
 }
 
-.cell input:disabled {
+.cell input:disabled,
+.cell input:read-only {
     opacity: 1;
 }
 
 .cell.solved input {
     color: var(--muted);
+    -webkit-text-fill-color: var(--muted);
+    cursor: default;
 }
 
 .group.revealed .cell.solved input {
     color: var(--ok);
+    -webkit-text-fill-color: var(--ok);
     border-color: rgba(74, 222, 128, 0.25);
 }
 
@@ -166,6 +170,7 @@ button {
     padding: 12px 28px;
     font-size: 0.9rem;
     font-weight: 500;
+    font-family: inherit;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     cursor: pointer;
