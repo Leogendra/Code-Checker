@@ -30,7 +30,20 @@ def ensure_db() -> None:
     subprocess.check_call([sys.executable, INIT_SCRIPT], cwd=BACKEND_DIR)
 
 
+def migrate_db() -> None:
+    """Ajoute la colonne `value` si absente (stocke la valeur en clair après résolution)."""
+    conn = sqlite3.connect(DB_PATH)
+    try:
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(fields)").fetchall()}
+        if "value" not in cols:
+            conn.execute("ALTER TABLE fields ADD COLUMN value TEXT")
+            conn.commit()
+    finally:
+        conn.close()
+
+
 ensure_db()
+migrate_db()
 
 NUM_FIELDS = 8
 GROUPS = [[0, 1, 2, 3], [4, 5, 6, 7]]
@@ -89,7 +102,7 @@ def _all_solved(db: sqlite3.Connection) -> bool:
 
 
 def _load_fields(db: sqlite3.Connection) -> dict[int, dict]:
-    rows = db.execute("SELECT id, salt, hash, solved, locked_until FROM fields ORDER BY id").fetchall()
+    rows = db.execute("SELECT id, salt, hash, solved, locked_until, value FROM fields ORDER BY id").fetchall()
     return {
         r["id"]: {
             "id": r["id"],
@@ -97,6 +110,7 @@ def _load_fields(db: sqlite3.Connection) -> dict[int, dict]:
             "hash": r["hash"],
             "solved": bool(r["solved"]),
             "locked_until": r["locked_until"],
+            "value": r["value"],
         }
         for r in rows
     }
@@ -124,7 +138,10 @@ def api_state():
         lu = parse_iso(f["locked_until"])
         if lu and lu <= now:
             lu = None
-        fields.append({"id": fid, "solved": f["solved"], "locked_until": iso(lu)})
+        entry = {"id": fid, "solved": f["solved"], "locked_until": iso(lu)}
+        if f["solved"] and f["value"]:
+            entry["value"] = f["value"]
+        fields.append(entry)
     return jsonify(
         {
             "fields": fields,
@@ -201,8 +218,8 @@ def api_check():
 
     if correct_ids:
         db.executemany(
-            "UPDATE fields SET solved = 1, locked_until = NULL WHERE id = ?",
-            [(fid,) for fid in correct_ids],
+            "UPDATE fields SET solved = 1, locked_until = NULL, value = ? WHERE id = ?",
+            [(cleaned[fid], fid) for fid in correct_ids],
         )
         db.commit()
 

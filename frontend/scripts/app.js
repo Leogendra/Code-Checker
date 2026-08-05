@@ -138,11 +138,12 @@ async function submitAll() {
             return;
         }
         applyBatchResult(data);
-        describeBatch(data);
         if (data.all_solved) state.all_solved = true;
-    } catch (err) {
+    } 
+    catch (err) {
         setStatus("Erreur réseau.");
-    } finally {
+    } 
+    finally {
         render();
     }
 }
@@ -153,24 +154,10 @@ function applyBatchResult(data) {
         if (res.correct) {
             state.fields[fid].solved = true;
             state.fields[fid].locked_until = null;
+            state.fields[fid].value = String(state.fields[fid].value || "").padStart(2, "0");
         }
     });
     if (data.global_locked) state.global_locked_until = data.global_retry_at || null;
-}
-
-function describeBatch(data) {
-    if (data.global_locked) {
-        setStatus("Au moins une réponse fausse — site verrouillé 1 h.");
-        return;
-    }
-    if (data.all_solved) {
-        setStatus("Toutes les réponses sont correctes.");
-        return;
-    }
-    const results = data.results || {};
-    const ok = Object.values(results).filter((r) => r.correct).length;
-    if (ok > 0) setStatus(`${ok} champ${ok > 1 ? "s" : ""} validé${ok > 1 ? "s" : ""}.`);
-    else setStatus("");
 }
 
 function setStatus(msg) {
@@ -185,12 +172,13 @@ async function loadState() {
         data.fields.forEach((f) => {
             state.fields[f.id].solved = f.solved;
             state.fields[f.id].locked_until = f.locked_until;
+            if (f.solved && f.value) state.fields[f.id].value = f.value;
         });
         state.all_solved = data.all_solved;
         state.global_locked_until = data.global_locked_until;
         render();
     } catch (e) {
-        setStatus("Impossible de charger l'état.");
+        setStatus("Check ta connexion pelo.");
     }
 }
 
@@ -241,7 +229,7 @@ function render() {
     els.globalLock.classList.toggle("visible", gl);
     if (gl) {
         const ms = new Date(state.global_locked_until).getTime() - Date.now();
-        els.globalLock.innerHTML = `<div class="label">Site verrouillé</div><div class="countdown">${fmtCountdown(ms)}</div>`;
+        els.globalLock.innerHTML = `<div class="label">...</div><div class="countdown">${fmtCountdown(ms)}</div>`;
         els.submitBtn.disabled = true;
     } else {
         els.globalLock.innerHTML = "";

@@ -9,6 +9,9 @@
     <link rel="icon" type="image/png" href="favicon.png" />
     <link rel="stylesheet" href="css/style.css" />
     <style>
+        * {
+            font-family: "SF Mono", "Consolas", monospace !important; /* override global font */
+        }
         .admin {
             display: flex;
             flex-direction: column;
@@ -74,7 +77,6 @@
         }
 
         .row .fid {
-            font-family: "SF Mono", "Consolas", monospace;
             color: var(--muted);
             font-size: 0.85rem;
         }
@@ -136,7 +138,6 @@
 
         .global-card-status {
             margin-top: 4px;
-            font-family: "SF Mono", "Consolas", monospace;
             font-variant-numeric: tabular-nums;
             font-size: 1.1rem;
             letter-spacing: 0.04em;
@@ -190,7 +191,6 @@
             border: 1px solid var(--glass-border);
             border-radius: 6px;
             font-size: 0.85rem;
-            font-family: "SF Mono", "Consolas", monospace;
             outline: none;
             text-align: center;
         }

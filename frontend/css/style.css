@@ -140,6 +140,7 @@ body {
 }
 
 .dot {
+    font-family: "SF Mono", "Consolas", monospace !important;
     font-size: 2rem;
     font-weight: 700;
     color: var(--accent);
@@ -258,7 +259,7 @@ button:disabled {
 
 .global-lock .countdown {
     margin-top: 6px;
-    font-family: "SF Mono", "Consolas", monospace;
+    /* font-family: "SF Mono", "Consolas", monospace; */
     font-variant-numeric: tabular-nums;
     font-size: 1.8rem;
     letter-spacing: 0.08em;

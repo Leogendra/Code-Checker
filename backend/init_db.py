@@ -18,7 +18,7 @@ import sys
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "data.db")
 
-ANSWER = "43.144385,2.993759"  # coords with format "lat,lon" (with decimals)
+ANSWER = "43.174385,2.993759"  # coords with format "lat,lon" (with decimals)
 
 ANSWER_PIECES = []
 for part in ANSWER.split(","):
@@ -27,6 +27,8 @@ for part in ANSWER.split(","):
     ANSWER_PIECES.append(part2[:2])
     ANSWER_PIECES.append(part2[2:4])
     ANSWER_PIECES.append(part2[4:6])
+
+print(f"ANSWER_PIECES : {ANSWER_PIECES}")
 
 
 FINAL_MESSAGE = {
@@ -48,7 +50,8 @@ def build_schema(conn: sqlite3.Connection) -> None:
             salt TEXT NOT NULL,
             hash TEXT NOT NULL,
             solved INTEGER NOT NULL DEFAULT 0,
-            locked_until TEXT
+            locked_until TEXT,
+            value TEXT
         );
         CREATE TABLE final (
             id INTEGER PRIMARY KEY CHECK (id = 1),
