@@ -20,10 +20,45 @@ html, body {
     min-height: 100vh;
 }
 
+@font-face {
+  font-family: "Buis";
+  src: url("../fonts/Buis-MLyB.ttf") format("truetype");
+  font-weight: normal;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "FontsBombJigsaw";
+  src: url("../fonts/FontsBombJigsaw-0aEr.ttf") format("truetype");
+  font-weight: normal;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "Glitex";
+  src: url("../fonts/Glitex-gw7y6.otf") format("opentype");
+  font-weight: normal;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "Merkur";
+  src: url("../fonts/Merkur-j147.otf") format("opentype");
+  font-weight: normal;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "Quasoid";
+  src: url("../fonts/QuasoidRegular-2D4l.ttf") format("truetype");
+  font-weight: normal;
+  font-style: normal;
+}
+
 body {
     background: var(--bg);
     color: var(--text);
-    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-family: "Merkur"; /* "Buis" "FontsBombJigsaw" "Glitex" "Merkur" "Quasoid" */
     display: flex;
     align-items: center;
     justify-content: center;
@@ -108,11 +143,10 @@ body {
     font-size: 2rem;
     font-weight: 700;
     color: var(--accent);
-    line-height: 1;
     text-shadow: 0 0 12px rgba(125, 211, 252, 0.6);
     margin: 0 4px;
-    padding-bottom: 18px;
     user-select: none;
+    align-self: flex-end;
 }
 
 .actions,

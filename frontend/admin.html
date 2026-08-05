@@ -105,7 +105,103 @@
             display: flex;
             gap: 10px;
             justify-content: center;
+            align-items: center;
             flex-wrap: wrap;
+        }
+
+        .global-card {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+            flex-wrap: wrap;
+            padding: 16px 20px;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 10px;
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+
+        .global-card.locked {
+            border-color: rgba(248, 113, 113, 0.35);
+        }
+
+        .global-card-label {
+            font-size: 0.7rem;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            color: var(--muted);
+        }
+
+        .global-card-status {
+            margin-top: 4px;
+            font-family: "SF Mono", "Consolas", monospace;
+            font-variant-numeric: tabular-nums;
+            font-size: 1.1rem;
+            letter-spacing: 0.04em;
+        }
+
+        .global-card.locked .global-card-status {
+            color: var(--ko);
+        }
+
+        .global-card.free .global-card-status {
+            color: var(--ok);
+        }
+
+        .global-card-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .global-card-actions button {
+            padding: 8px 14px;
+            font-size: 0.7rem;
+            letter-spacing: 0.1em;
+        }
+
+        .duration {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 10px;
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+
+        .duration label {
+            font-size: 0.7rem;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--muted);
+        }
+
+        .duration input {
+            width: 70px;
+            height: 30px;
+            padding: 0 8px;
+            background: transparent;
+            color: var(--text);
+            border: 1px solid var(--glass-border);
+            border-radius: 6px;
+            font-size: 0.85rem;
+            font-family: "SF Mono", "Consolas", monospace;
+            outline: none;
+            text-align: center;
+        }
+
+        .duration input:focus {
+            border-color: var(--glass-border-strong);
+        }
+
+        .duration .hint {
+            font-size: 0.7rem;
+            color: var(--muted);
         }
 
         .msg {
@@ -133,11 +229,27 @@
         </div>
 
         <div id="panel" style="display:none; flex-direction:column; gap:24px;">
+            <div id="global-card" class="global-card">
+                <div class="global-card-info">
+                    <div class="global-card-label">Verrou global</div>
+                    <div id="global-status" class="global-card-status">—</div>
+                </div>
+                <div class="global-card-actions">
+                    <button id="global-lock-btn">Verrouiller le site</button>
+                    <button id="global-unlock-btn">Déverrouiller</button>
+                </div>
+            </div>
+
+            <div class="duration">
+                <label for="hours">Durée</label>
+                <input id="hours" type="number" min="0" step="0.25" placeholder="∞" />
+                <span class="hint">heures (vide = permanent)</span>
+            </div>
+
             <div class="bulk">
-                <button id="lock-all">Tout verrouiller</button>
-                <button id="unlock-all">Tout déverrouiller</button>
                 <button id="refresh">Rafraîchir</button>
             </div>
+
             <div id="rows" class="rows"></div>
             <div id="msg" class="msg"></div>
         </div>
@@ -155,10 +267,21 @@
             panel: document.getElementById("panel"),
             rows: document.getElementById("rows"),
             msg: document.getElementById("msg"),
-            lockAll: document.getElementById("lock-all"),
-            unlockAll: document.getElementById("unlock-all"),
             refresh: document.getElementById("refresh"),
+            hours: document.getElementById("hours"),
+            globalCard: document.getElementById("global-card"),
+            globalStatus: document.getElementById("global-status"),
+            globalLockBtn: document.getElementById("global-lock-btn"),
+            globalUnlockBtn: document.getElementById("global-unlock-btn"),
         };
+
+        function getHours() {
+            const raw = els.hours.value.trim();
+            if (raw === "") return null;
+            const n = Number(raw);
+            if (!isFinite(n) || n <= 0) return null;
+            return n;
+        }
 
         function getToken() {
             return sessionStorage.getItem("admin_token") || "";
@@ -225,6 +348,34 @@
             return `verrouillé (${cd})`;
         }
 
+        let _globalUntil = null;
+
+        function renderGlobal(data) {
+            if (data && "global_locked_until" in data) _globalUntil = data.global_locked_until;
+            const lu = _globalUntil;
+            const t = lu ? new Date(lu).getTime() : 0;
+            const active = lu && t > Date.now();
+            els.globalCard.classList.toggle("locked", !!active);
+            els.globalCard.classList.toggle("free", !active);
+            if (!active) {
+                els.globalStatus.textContent = "libre";
+                els.globalUnlockBtn.disabled = true;
+                return;
+            }
+            els.globalUnlockBtn.disabled = false;
+            if (t > Date.now() + 365 * 24 * 3600 * 1000) {
+                els.globalStatus.textContent = "verrouillé (permanent)";
+                return;
+            }
+            const s = Math.floor((t - Date.now()) / 1000);
+            const h = Math.floor(s / 3600);
+            const m = Math.floor((s % 3600) / 60);
+            const sec = s % 60;
+            const pad = (n) => String(n).padStart(2, "0");
+            const cd = h > 0 ? `${pad(h)}:${pad(m)}:${pad(sec)}` : `${pad(m)}:${pad(sec)}`;
+            els.globalStatus.textContent = `verrouillé (${cd})`;
+        }
+
         function renderRows(data) {
             els.rows.innerHTML = "";
             data.fields.forEach((f) => {
@@ -262,6 +413,7 @@
         async function refresh() {
             try {
                 const data = await api("GET", "/api/admin/state");
+                renderGlobal(data);
                 renderRows(data);
                 setMsg("");
             } catch (e) {
@@ -269,10 +421,33 @@
             }
         }
 
-        async function lockFields(ids) {
+        async function globalLock() {
+            const hours = getHours();
             try {
-                await api("POST", "/api/admin/lock", { field_ids: ids, hours: null });
-                setMsg(`Verrouillé : ${ids.join(", ")}`);
+                await api("POST", "/api/admin/global-lock", { hours });
+                setMsg(`Site verrouillé (${hours ? hours + "h" : "permanent"}).`);
+                await refresh();
+            } catch (e) {
+                if (e.message !== "unauthorized") setMsg("Erreur : " + e.message, true);
+            }
+        }
+
+        async function globalUnlock() {
+            try {
+                await api("POST", "/api/admin/global-unlock");
+                setMsg("Site déverrouillé.");
+                await refresh();
+            } catch (e) {
+                if (e.message !== "unauthorized") setMsg("Erreur : " + e.message, true);
+            }
+        }
+
+        async function lockFields(ids) {
+            const hours = getHours();
+            try {
+                await api("POST", "/api/admin/lock", { field_ids: ids, hours });
+                const label = hours ? `${hours}h` : "permanent";
+                setMsg(`Verrouillé (${label}) : ${ids.join(", ")}`);
                 await refresh();
             } catch (e) {
                 if (e.message !== "unauthorized") setMsg("Erreur : " + e.message, true);
@@ -310,19 +485,25 @@
 
         els.loginBtn.addEventListener("click", login);
         els.pwd.addEventListener("keydown", (e) => { if (e.key === "Enter") login(); });
-        els.lockAll.addEventListener("click", () => lockFields([...Array(NUM_FIELDS).keys()]));
-        els.unlockAll.addEventListener("click", () => unlockFields([...Array(NUM_FIELDS).keys()]));
+        els.globalLockBtn.addEventListener("click", globalLock);
+        els.globalUnlockBtn.addEventListener("click", globalUnlock);
         els.refresh.addEventListener("click", refresh);
 
         if (getToken()) {
             api("GET", "/api/admin/state").then(
-                (data) => { showPanel(); renderRows(data); },
+                (data) => { showPanel(); renderGlobal(data); renderRows(data); },
                 () => { /* showLogin déjà appelée si 401 */ }
             );
         } else {
             showLogin();
         }
 
+        // décompte local rafraîchi chaque seconde (sans refetch)
+        setInterval(() => {
+            if (els.panel.style.display !== "none") renderGlobal();
+        }, 1000);
+
+        // refetch complet toutes les 15s
         setInterval(() => {
             if (els.panel.style.display !== "none") refresh();
         }, 15000);

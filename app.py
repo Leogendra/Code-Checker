@@ -321,5 +321,36 @@ def api_admin_unlock():
     return jsonify({"unlocked": ids})
 
 
+@app.post("/api/admin/global-lock")
+@limiter.limit("30 per minute")
+@require_admin
+def api_admin_global_lock():
+    """Force le verrou global. Body : {"hours": float | null}. null → permanent."""
+    global _global_locked_until
+    payload = request.get_json(silent=True) or {}
+    hours = payload.get("hours")
+    if hours is None:
+        _global_locked_until = datetime(9999, 12, 31, tzinfo=timezone.utc)
+    else:
+        try:
+            hours = float(hours)
+        except (TypeError, ValueError):
+            return jsonify({"error": "invalid hours"}), 400
+        if hours <= 0:
+            return jsonify({"error": "hours must be > 0"}), 400
+        _global_locked_until = now_utc() + timedelta(hours=hours)
+    return jsonify({"global_locked_until": iso(_global_locked_until)})
+
+
+@app.post("/api/admin/global-unlock")
+@limiter.limit("30 per minute")
+@require_admin
+def api_admin_global_unlock():
+    """Libère le verrou global."""
+    global _global_locked_until
+    _global_locked_until = None
+    return jsonify({"global_locked_until": None})
+
+
 if __name__ == "__main__":
     app.run(host="127.0.0.1", port=5000, debug=False)
