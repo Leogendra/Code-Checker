@@ -248,6 +248,7 @@
 
             <div class="bulk">
                 <button id="refresh">Rafraîchir</button>
+                <button id="reset-btn">Reset champs</button>
             </div>
 
             <div id="rows" class="rows"></div>
@@ -268,6 +269,7 @@
             rows: document.getElementById("rows"),
             msg: document.getElementById("msg"),
             refresh: document.getElementById("refresh"),
+            resetBtn: document.getElementById("reset-btn"),
             hours: document.getElementById("hours"),
             globalCard: document.getElementById("global-card"),
             globalStatus: document.getElementById("global-status"),
@@ -442,6 +444,17 @@
             }
         }
 
+        async function resetFields() {
+            if (!confirm("Réinitialiser tous les champs (les réponses actuelles seront perdues) ?")) return;
+            try {
+                await api("POST", "/api/admin/reset");
+                setMsg("Champs réinitialisés.");
+                await refresh();
+            } catch (e) {
+                if (e.message !== "unauthorized") setMsg("Erreur : " + e.message, true);
+            }
+        }
+
         async function lockFields(ids) {
             const hours = getHours();
             try {
@@ -488,6 +501,7 @@
         els.globalLockBtn.addEventListener("click", globalLock);
         els.globalUnlockBtn.addEventListener("click", globalUnlock);
         els.refresh.addEventListener("click", refresh);
+        els.resetBtn.addEventListener("click", resetFields);
 
         if (getToken()) {
             api("GET", "/api/admin/state").then(

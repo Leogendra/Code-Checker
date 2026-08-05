@@ -41,7 +41,23 @@ app = Flask(__name__, static_folder=STATIC_DIR, static_url_path="")
 limiter = Limiter(get_remote_address, app=app, default_limits=["60 per minute"])
 
 _data_lock = threading.Lock()
-_global_locked_until: datetime | None = None
+
+
+def _load_global_lock() -> datetime | None:
+    """Charge le verrou global depuis data.json au démarrage."""
+    try:
+        data = load_data()
+        return parse_iso(data.get("global_locked_until"))
+    except Exception:
+        return None
+
+
+def _persist_global_lock(dt: datetime | None) -> None:
+    """Sauvegarde le verrou global dans data.json (survit aux redémarrages)."""
+    with _data_lock:
+        data = load_data()
+        data["global_locked_until"] = iso(dt)
+        save_data(data)
 
 
 def now_utc() -> datetime:
@@ -77,6 +93,9 @@ def global_lock_active() -> datetime | None:
     if _global_locked_until and _global_locked_until > now_utc():
         return _global_locked_until
     return None
+
+
+_global_locked_until: datetime | None = _load_global_lock()
 
 
 @app.get("/")
@@ -116,7 +135,7 @@ def api_state():
 
 
 @app.post("/api/check")
-@limiter.limit("15 per minute")
+@limiter.limit("5 per minute")
 def api_check():
     """
     Batch. Body : {"fields": [{"field_id": int, "value": "X" | "XX"}, ...]}
@@ -174,6 +193,8 @@ def api_check():
 
         if wrong:
             _global_locked_until = now + LOCK_DURATION
+            data["global_locked_until"] = iso(_global_locked_until)
+            save_data(data)
             response["global_locked"] = True
             response["global_retry_at"] = iso(_global_locked_until)
             response["all_solved"] = all(x["solved"] for x in data["fields"])
@@ -343,6 +364,7 @@ def api_admin_global_lock():
         if hours <= 0:
             return jsonify({"error": "hours must be > 0"}), 400
         _global_locked_until = now_utc() + timedelta(hours=hours)
+    _persist_global_lock(_global_locked_until)
     return jsonify({"global_locked_until": iso(_global_locked_until)})
 
 
@@ -353,7 +375,26 @@ def api_admin_global_unlock():
     """Libère le verrou global."""
     global _global_locked_until
     _global_locked_until = None
+    _persist_global_lock(None)
     return jsonify({"global_locked_until": None})
+
+
+@app.post("/api/admin/reset")
+@limiter.limit("10 per minute")
+@require_admin
+def api_admin_reset():
+    """Remet tous les champs à non-résolu, sans valeur, sans verrou. Lève aussi le verrou global."""
+    global _global_locked_until
+    with _data_lock:
+        data = load_data()
+        for f in data["fields"]:
+            f["solved"] = False
+            f["value"] = None
+            f["locked_until"] = None
+        data["global_locked_until"] = None
+        save_data(data)
+    _global_locked_until = None
+    return jsonify({"reset": True})
 
 
 if __name__ == "__main__":
