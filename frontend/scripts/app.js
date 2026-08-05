@@ -55,13 +55,8 @@ function buildLayout() {
             const timer = document.createElement("div");
             timer.className = "timer";
 
-            const idx = document.createElement("div");
-            idx.className = "idx";
-            idx.textContent = "#" + fid;
-
             cell.appendChild(input);
             cell.appendChild(timer);
-            cell.appendChild(idx);
             groupEl.appendChild(cell);
         });
 
