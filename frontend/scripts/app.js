@@ -148,15 +148,21 @@ async function submitAll() {
 }
 
 function applyBatchResult(data) {
+    let pendingCount = 0;
     Object.entries(data.results || {}).forEach(([fidStr, res]) => {
         const fid = Number(fidStr);
-        if (res.correct) {
+        if (res.correct && !res.pending) {
             state.fields[fid].solved = true;
             state.fields[fid].locked_until = null;
             state.fields[fid].value = String(state.fields[fid].value || "").padStart(2, "0");
+        } else if (res.pending) {
+            pendingCount++;
         }
     });
     if (data.global_locked) state.global_locked_until = data.global_retry_at || null;
+    if (pendingCount > 0 && !data.global_locked) {
+        setStatus(`${pendingCount} bonne(s) réponse(s), mais groupe incomplet : non enregistré.`);
+    }
 }
 
 function setStatus(msg) {

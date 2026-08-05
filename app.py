@@ -179,8 +179,26 @@ def api_check():
             response["all_solved"] = all(x["solved"] for x in data["fields"])
             return jsonify(response)
 
-        if correct_ids:
-            for fid in correct_ids:
+        # Persistance atomique par groupe : on n'écrit que si le groupe est intégralement
+        # correct (batch + déjà solved en DB). Sinon les correctes restent en attente.
+        correct_set = set(correct_ids)
+        to_persist: list[int] = []
+        for group_fids in GROUPS:
+            group_complete = all(
+                (fid in correct_set or data["fields"][fid]["solved"])
+                for fid in group_fids
+            )
+            if group_complete:
+                for fid in group_fids:
+                    if fid in correct_set:
+                        to_persist.append(fid)
+
+        pending_set = correct_set - set(to_persist)
+        for fid in pending_set:
+            results[fid]["pending"] = True
+
+        if to_persist:
+            for fid in to_persist:
                 data["fields"][fid]["solved"] = True
                 data["fields"][fid]["locked_until"] = None
                 data["fields"][fid]["value"] = cleaned[fid]

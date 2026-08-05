@@ -122,8 +122,6 @@ body {
 }
 
 .cell.solved input {
-    color: var(--muted);
-    -webkit-text-fill-color: var(--muted);
     cursor: default;
 }
 
