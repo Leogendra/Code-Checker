@@ -5,6 +5,5 @@ venv/
 env/
 
 data.db
-config.py
 
 .env

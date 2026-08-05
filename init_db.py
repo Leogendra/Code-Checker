@@ -16,13 +16,26 @@ import secrets
 import sqlite3
 import sys
 
-try:
-    from config import ANSWERS, FINAL_MESSAGE
-except ImportError:
-    print("Erreur : config.py manquant. Copie config.example.py en config.py et remplis les valeurs.")
-    sys.exit(1)
-
 DB_PATH = os.path.join(os.path.dirname(__file__), "data.db")
+
+ANSWER = "43.144385,2.993759"  # coords with format "lat,lon" (with decimals)
+
+ANSWER_PIECES = []
+for part in ANSWER.split(","):
+    part1, part2 = part.split(".")
+    if len(part1) == 1:
+        part1 = "0" + part1
+    ANSWER_PIECES.append(part1)
+    ANSWER_PIECES.append(part2[:2])
+    ANSWER_PIECES.append(part2[2:4])
+    ANSWER_PIECES.append(part2[4:6])
+
+
+FINAL_MESSAGE = {
+    "coords": ANSWER,
+    "maps_url": f"https://www.google.com/maps/?q={ANSWER}",
+    "note": "Bravo? Tu as trouvé les coordonnées de la Tour Eiffel !",
+}
 
 
 def sha256_hex(salt: str, value: str) -> str:
@@ -48,11 +61,11 @@ def build_schema(conn: sqlite3.Connection) -> None:
 
 
 def seed(conn: sqlite3.Connection) -> None:
-    if len(ANSWERS) != 8:
-        raise ValueError("ANSWERS doit contenir exactement 8 valeurs.")
-    for idx, value in enumerate(ANSWERS):
+    if len(ANSWER_PIECES) != 8:
+        raise ValueError("ANSWER_PIECES doit contenir exactement 8 valeurs.")
+    for idx, value in enumerate(ANSWER_PIECES):
         if not isinstance(value, str) or len(value) != 2 or not value.isdigit():
-            raise ValueError(f"ANSWERS[{idx}] doit être une chaîne de 2 chiffres, reçu : {value!r}")
+            raise ValueError(f"ANSWER_PIECES[{idx}] doit être une chaîne de 2 chiffres, reçu : {value!r}")
         salt = secrets.token_hex(16)
         conn.execute(
             "INSERT INTO fields (id, salt, hash, solved, locked_until) VALUES (?, ?, ?, 0, NULL)",
