@@ -1,13 +1,3 @@
-"""
-Serveur Flask.
-
-Prérequis :
-    python init_db.py
-
-Lancement :
-    python app.py
-"""
-
 import hashlib
 import json
 import os
@@ -24,7 +14,7 @@ load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN") or None
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "data.db")
-STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
+STATIC_DIR = os.path.join(os.path.dirname(__file__), "frontend")
 
 NUM_FIELDS = 8
 GROUPS = [[0, 1, 2, 3], [4, 5, 6, 7]]
