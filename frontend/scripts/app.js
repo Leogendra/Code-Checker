@@ -31,9 +31,7 @@ const els = {
     coords: document.getElementById("coords"),
     status: document.getElementById("status"),
     submitBtn: document.getElementById("submit-btn"),
-    actions: document.getElementById("actions"),
-    copyBtn: document.getElementById("copy-btn"),
-    revealBtn: document.getElementById("reveal-btn"),
+    submitRow: document.getElementById("submit-row"),
     final: document.getElementById("final"),
     globalLock: document.getElementById("global-lock"),
 };
@@ -499,64 +497,78 @@ function render() {
     // Verrouillé = pas de nouvelle tentative, même pendant l'animation.
     els.submitBtn.disabled = gl;
 
-    els.actions.style.display = state.all_solved && showVerdict ? "flex" : "none";
+    // Réussite : plus rien à valider, la carte finale prend le relais.
+    const won = state.all_solved && showVerdict;
+    els.submitRow.style.display = won ? "none" : "flex";
+    if (won) revealFinal();
 }
 
-function copyCoords() {
-    const parts = [];
-    LAYOUT.forEach((ids) => {
-        // Chaque champ doit peser 2 chiffres pour reconstruire la coordonnée,
-        // même si l'affichage n'a pas de zéro de tête.
-        const s = ids.map((i) => (state.fields[i].value ? String(state.fields[i].value).padStart(2, "0") : "??")).join("");
-        parts.push(s.slice(0, 2) + "." + s.slice(2));
-    });
-    const txt = parts.join(", ");
+function copyText(txt) {
+    if (!txt) return;
     navigator.clipboard.writeText(txt).then(
         () => setStatus("Coordonnées copiées : " + txt),
         () => setStatus("Copie impossible."),
     );
 }
 
-async function reveal() {
+/* ---------- Carte finale ---------- */
+
+// idle → loading → done. render() tourne chaque seconde : sans cet état on
+// rappellerait /api/reveal en boucle (et le serveur limite à 10 req/min).
+let finalState = "idle";
+let finalRetryAt = 0;
+
+async function revealFinal() {
+    if (finalState !== "idle" || Date.now() < finalRetryAt) return;
+    finalState = "loading";
     try {
         const r = await fetch("/api/reveal");
-        if (!r.ok) {
-            setStatus("Révélation impossible pour l'instant.");
-            return;
-        }
-        const data = await r.json();
-        els.final.innerHTML = "";
-        const h = document.createElement("h2");
-        h.textContent = "Trouvé";
-        els.final.appendChild(h);
-        if (data.coords) {
-            const p = document.createElement("div");
-            p.className = "coords-line";
-            p.textContent = data.coords;
-            els.final.appendChild(p);
-        }
-        if (data.maps_url) {
-            const a = document.createElement("a");
-            a.href = data.maps_url;
-            a.target = "_blank";
-            a.rel = "noopener";
-            a.textContent = "Ouvrir dans Google Maps";
-            els.final.appendChild(a);
-        }
-        if (data.note) {
-            const p = document.createElement("p");
-            p.textContent = data.note;
-            els.final.appendChild(p);
-        }
-        els.final.classList.add("visible");
+        if (!r.ok) throw new Error("http " + r.status);
+        renderFinal(await r.json());
+        finalState = "done";
     } catch (e) {
-        setStatus("Erreur réseau lors de la révélation.");
+        finalState = "idle";
+        finalRetryAt = Date.now() + 5000; // nouvelle tentative, sans marteler l'API
+        setStatus("Révélation impossible pour l'instant.");
     }
 }
 
+function renderFinal(data) {
+    els.final.innerHTML = "";
+
+    const h = document.createElement("h2");
+    h.textContent = "Bravo";
+    els.final.appendChild(h);
+
+    if (data.note) {
+        const p = document.createElement("p");
+        p.textContent = data.note;
+        els.final.appendChild(p);
+    }
+
+    const row = document.createElement("div");
+    row.className = "final-actions";
+
+    const copy = document.createElement("button");
+    copy.textContent = "Copier";
+    copy.addEventListener("click", () => copyText(data.coords || ""));
+    row.appendChild(copy);
+
+    if (data.maps_url) {
+        const a = document.createElement("a");
+        a.className = "btn";
+        a.href = data.maps_url;
+        a.target = "_blank";
+        a.rel = "noopener";
+        a.textContent = "Ouvrir dans Maps";
+        row.appendChild(a);
+    }
+
+    els.final.appendChild(row);
+    els.final.classList.add("visible");
+}
+
 els.submitBtn.addEventListener("click", submitAll);
-els.copyBtn.addEventListener("click", copyCoords);
-els.revealBtn.addEventListener("click", reveal);
 
 buildLayout();
 loadState();

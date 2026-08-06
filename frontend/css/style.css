@@ -466,7 +466,6 @@ body {
     align-self: flex-end;
 }
 
-.actions,
 .submit-row {
     display: flex;
     gap: 12px;
@@ -474,7 +473,9 @@ body {
     flex-wrap: wrap;
 }
 
-button {
+/* .btn : un lien qui doit avoir exactement l'allure d'un bouton */
+button,
+.btn {
     background: var(--glass-bg);
     color: var(--text);
     border: 1px solid var(--glass-border);
@@ -491,7 +492,14 @@ button {
     transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
 }
 
-button:hover:not(:disabled) {
+.btn {
+    display: inline-block;
+    text-decoration: none;
+    line-height: 1;
+}
+
+button:hover:not(:disabled),
+.btn:hover {
     border-color: var(--glass-border-strong);
     background: rgba(255, 255, 255, 0.05);
     box-shadow: 0 0 0 3px rgba(125, 211, 252, 0.08);
@@ -539,13 +547,26 @@ button:disabled {
     text-transform: uppercase;
 }
 
-.final .coords-line {
-    font-family: "SF Mono", "Consolas", monospace;
-    font-size: 1.2rem;
-    margin: 6px 0;
+.final p {
+    margin: 12px 0 0;
 }
 
-.final a {
+.final-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-top: 18px;
+}
+
+.final-actions button,
+.final-actions .btn {
+    padding: 10px 20px;
+    font-size: 0.78rem;
+}
+
+/* liens hors boutons (aucun aujourd'hui, mais la carte peut en contenir) */
+.final a:not(.btn) {
     color: var(--accent);
     text-decoration: none;
     border-bottom: 1px solid rgba(125, 211, 252, 0.3);

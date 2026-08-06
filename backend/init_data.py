@@ -26,9 +26,8 @@ for part in ANSWER.split(","):
     ANSWER_PIECES.append(part2[4:6])
 
 FINAL = {
-    "coords": ANSWER,
     "maps_url": f"https://www.google.com/maps/?q={ANSWER}",
-    "note": "Bravo? Tu as trouvé les coordonnées de la Tour Eiffel !",
+    "note": "C'est l'heure de se rendre aux coordonnées...",
 }
 
 
