@@ -12,7 +12,7 @@ let groupOf = Object.fromEntries(groups.map((ids, gi) => ids.map((fid) => [fid, 
 const LONG_PRESS_MS = 350; // maintien tactile pour afficher le groupe
 
 // Animations : durées alignées sur les keyframes de style.css
-const FX_STAGGER_MS = 1000; // décalage entre deux champs (gauche → droite)
+const FX_STAGGER_MS = 1500; // décalage entre deux groupes (gauche → droite)
 const FX_SUCCESS_MS = 1800;
 const FX_FAIL_MS = 520;
 
@@ -178,9 +178,16 @@ function cellOf(fid) {
 let hintTimer = null;
 let hintedGroup = null;
 
+// Un groupe déjà révélé n'a plus rien à indiquer : le serveur ne renvoie
+// solved=true que lorsque le groupe entier est résolu.
+function isGroupRevealed(gi) {
+    return (groups[gi] || []).every((fid) => state.fields[fid].solved);
+}
+
 function showGroupHint(fid) {
     const gi = groupOf[fid];
     if (gi === undefined || gi === hintedGroup) return;
+    if (isGroupRevealed(gi)) return;
     hideGroupHint();
     hintedGroup = gi;
 
@@ -246,6 +253,11 @@ function bindGroupHint(cell) {
 let fxTimers = [];
 let fxRunningUntil = 0;
 
+// Vrai tant que la séquence d'animation n'est pas terminée.
+function fxBusy() {
+    return Date.now() < fxRunningUntil;
+}
+
 function clearFx() {
     fxTimers.forEach(clearTimeout);
     fxTimers = [];
@@ -257,55 +269,86 @@ function clearFx() {
 }
 
 /**
- * Traduit la réponse serveur en étapes d'animation, de gauche à droite.
+ * Traduit la réponse serveur en étapes d'animation : une étape par groupe, les
+ * groupes ordonnés de gauche à droite (par leur champ le plus à gauche). Tous
+ * les champs d'une étape s'animent en même temps — un groupe est une serrure,
+ * elle s'ouvre d'un bloc.
+ *
  * Le serveur ne dit "correct" que si le groupe entier est résolu ; sinon on ne
  * sait rien du champ ({pending}) et on n'anime pas. Un verrou global signifie
- * qu'au moins une réponse du lot est fausse, sans dire laquelle : tous les
- * champs soumis non révélés tremblent donc, ce qui ne divulgue rien.
+ * qu'au moins une réponse du lot est fausse, sans dire laquelle : les champs
+ * soumis non révélés tremblent donc, ce qui ne divulgue rien.
  */
 function computeFxSteps(data, submittedIds) {
     const results = data.results || {};
-    const steps = [];
+    const byGroup = new Map();
+
     submittedIds.forEach((fid) => {
         const res = results[fid] ?? results[String(fid)];
         if (!res || res.skipped) return;
-        if (res.correct && !res.pending) steps.push({ fid, kind: "success" });
-        else if (data.global_locked) steps.push({ fid, kind: "fail" });
+        const kind = res.correct && !res.pending ? "success" : data.global_locked ? "fail" : null;
+        if (!kind) return;
+        const gi = groupOf[fid];
+        if (gi === undefined) return;
+        if (!byGroup.has(gi)) byGroup.set(gi, { gi, kind, fids: new Set() });
+        byGroup.get(gi).fids.add(fid);
     });
-    return steps.sort((a, b) => a.fid - b.fid);
+
+    // Un groupe révélé s'ouvre en entier, y compris les champs non soumis cette
+    // fois-ci (déjà résolus en base mais encore masqués côté client).
+    byGroup.forEach((step) => {
+        if (step.kind === "success") (groups[step.gi] || []).forEach((fid) => step.fids.add(fid));
+    });
+
+    return [...byGroup.values()]
+        .map((step) => ({ ...step, fids: [...step.fids].sort((a, b) => a - b) }))
+        .sort((a, b) => a.fids[0] - b.fids[0]);
+}
+
+// Durée totale de la séquence : un décalage par groupe, plus l'animation du dernier.
+function fxTotalMs(steps) {
+    if (!steps.length) return 0;
+    const last = steps[steps.length - 1];
+    return (steps.length - 1) * FX_STAGGER_MS +
+        (last.kind === "success" ? FX_SUCCESS_MS : FX_FAIL_MS);
 }
 
 // Gèle l'apparence des champs concernés avant le render(), pour que le
-// vert / rouge n'apparaisse qu'au moment de l'animation de chaque champ.
+// vert / rouge n'apparaisse qu'au moment de l'animation de leur groupe.
+// Réserve aussi le temps de la séquence dès maintenant : render() est appelé
+// avant runFxSequence, et sans ça le verdict s'afficherait une seconde de trop.
 function markFxPending(steps) {
     clearFx();
-    steps.forEach(({ fid }) => {
+    fxRunningUntil = Date.now() + fxTotalMs(steps);
+    steps.forEach(({ fids }) => fids.forEach((fid) => {
         const cell = cellOf(fid);
         if (cell) cell.dataset.fx = "pending";
-    });
+    }));
 }
 
 function runFxSequence(steps) {
     if (!steps.length) return;
-    const last = steps[steps.length - 1];
-    fxRunningUntil =
-        Date.now() +
-        (steps.length - 1) * FX_STAGGER_MS +
-        (last.kind === "success" ? FX_SUCCESS_MS : FX_FAIL_MS);
+    fxRunningUntil = Date.now() + fxTotalMs(steps);
 
-    steps.forEach(({ fid, kind }, i) => {
+    steps.forEach(({ fids, kind }, i) => {
         const start = setTimeout(() => {
-            const cell = cellOf(fid);
-            if (!cell) return;
-            delete cell.dataset.fx; // libère le style final (vert / rouge)
-            cell.classList.add(kind === "success" ? "unlocking" : "shaking");
+            const cells = fids.map(cellOf).filter(Boolean);
+            if (!cells.length) return;
+            cells.forEach((cell) => {
+                delete cell.dataset.fx; // libère le style final (vert / rouge)
+                cell.classList.add(kind === "success" ? "unlocking" : "shaking");
+            });
             const end = setTimeout(() => {
-                cell.classList.remove("unlocking", "shaking");
+                cells.forEach((cell) => cell.classList.remove("unlocking", "shaking"));
             }, (kind === "success" ? FX_SUCCESS_MS : FX_FAIL_MS) + 60);
             fxTimers.push(end);
         }, i * FX_STAGGER_MS);
         fxTimers.push(start);
     });
+
+    // Rend le verdict visible dès la dernière serrure jouée, sans attendre le
+    // tick de render() (toutes les secondes).
+    fxTimers.push(setTimeout(render, Math.max(0, fxRunningUntil - Date.now()) + 80));
 }
 
 async function submitAll() {
@@ -411,6 +454,10 @@ function fmtCountdown(ms) {
 function render() {
     const gl = isGlobalLocked();
 
+    // Le groupe surligné vient d'être révélé (fin d'animation, ou /api/state) :
+    // on retire l'indicateur sans attendre que le pointeur ressorte.
+    if (hintedGroup !== null && isGroupRevealed(hintedGroup)) hideGroupHint();
+
     state.fields.forEach((f) => {
         const cell = document.querySelector(`.cell[data-field="${f.id}"]`);
         const input = cell.querySelector("input");
@@ -438,20 +485,21 @@ function render() {
         }
     });
 
-    els.globalLock.classList.toggle("visible", gl);
-    if (gl) {
+    // Le verdict (chrono de verrouillage / écran de réussite) n'apparaît qu'une
+    // fois tous les champs animés : la serrure raconte d'abord, on conclut après.
+    const showVerdict = !fxBusy();
+
+    els.globalLock.classList.toggle("visible", gl && showVerdict);
+    if (gl && showVerdict) {
         const ms = new Date(state.global_locked_until).getTime() - Date.now();
         els.globalLock.innerHTML = `<div class="label">...</div><div class="countdown">${fmtCountdown(ms)}</div>`;
-        els.submitBtn.disabled = true;
     } else {
         els.globalLock.innerHTML = "";
-        els.submitBtn.disabled = false;
     }
+    // Verrouillé = pas de nouvelle tentative, même pendant l'animation.
+    els.submitBtn.disabled = gl;
 
-    // On attend la fin de la séquence d'ouverture avant de proposer les actions,
-    // pour ne pas court-circuiter l'effet de reveal.
-    els.actions.style.display =
-        state.all_solved && Date.now() >= fxRunningUntil ? "flex" : "none";
+    els.actions.style.display = state.all_solved && showVerdict ? "flex" : "none";
 }
 
 function copyCoords() {
