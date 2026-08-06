@@ -1,13 +1,19 @@
 import argparse
-import hashlib
 import json
 import os
-import secrets
 import sys
 
-DATA_PATH = os.path.join(os.path.dirname(__file__), "data.json")
+from dotenv import load_dotenv
 
-ANSWER = "43.174385,2.993759"  # coords with format "lat,lon" (with decimals)
+BACKEND_DIR = os.path.dirname(__file__)
+ROOT_DIR = os.path.dirname(BACKEND_DIR)
+DATA_PATH = os.path.join(BACKEND_DIR, "data.json")
+
+load_dotenv(os.path.join(ROOT_DIR, ".env"))
+
+ANSWER = os.environ.get("ANSWER")  # coords with format "lat,lon" (with decimals)
+if not ANSWER:
+    raise SystemExit("ANSWER manquant : définis-le dans le fichier .env (ex: ANSWER=43.174385,2.993759)")
 
 ANSWER_PIECES = []
 for part in ANSWER.split(","):
@@ -26,10 +32,6 @@ FINAL = {
 }
 
 
-def sha256_hex(salt: str, value: str) -> str:
-    return hashlib.sha256((salt + value).encode("utf-8")).hexdigest()
-
-
 def build_data() -> dict:
     if len(ANSWER_PIECES) != 8:
         raise ValueError("ANSWER_PIECES doit contenir exactement 8 valeurs.")
@@ -37,17 +39,19 @@ def build_data() -> dict:
     for idx, value in enumerate(ANSWER_PIECES):
         if not isinstance(value, str) or not value.isdigit():
             raise ValueError(f"ANSWER_PIECES[{idx}] doit être une chaîne de chiffres : {value!r}")
-        salt = secrets.token_hex(16)
         fields.append(
             {
-                "salt": salt,
-                "hash": sha256_hex(salt, value.zfill(2)),
+                # Réponse en clair : data.json ne quitte jamais le serveur et
+                # aucune route ne renvoie ce champ au client.
+                "answer": value.zfill(2),
                 "solved": False,
                 "locked_until": None,
-                "value": None,
+                "value": None,            # dernière valeur soumise
+                "attempts": 0,            # nombre de tentatives évaluées
+                "last_attempt_at": None,
             }
         )
-    return {"fields": fields, "final": FINAL}
+    return {"fields": fields, "final": FINAL, "global_locked_until": None}
 
 
 def main() -> None:

@@ -161,7 +161,7 @@ function applyBatchResult(data) {
     });
     if (data.global_locked) state.global_locked_until = data.global_retry_at || null;
     if (pendingCount > 0 && !data.global_locked) {
-        setStatus(`${pendingCount} bonne(s) réponse(s), mais groupe incomplet : non enregistré.`);
+        setStatus(`Tentative enregistrée, mais aucun groupe complet : rien à révéler.`);
     }
 }
 
@@ -175,9 +175,13 @@ async function loadState() {
         const r = await fetch("/api/state");
         const data = await r.json();
         data.fields.forEach((f) => {
-            state.fields[f.id].solved = f.solved;
-            state.fields[f.id].locked_until = f.locked_until;
-            if (f.solved && f.value) state.fields[f.id].value = f.value;
+            const local = state.fields[f.id];
+            local.solved = f.solved;
+            local.locked_until = f.locked_until;
+            // On rejoue la dernière valeur soumise, sans écraser une saisie en cours
+            // (loadState est aussi appelé périodiquement).
+            if (f.solved) local.value = f.value || local.value || "";
+            else if (!local.value && f.value) local.value = f.value;
         });
         state.all_solved = data.all_solved;
         state.global_locked_until = data.global_locked_until;

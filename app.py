@@ -1,4 +1,3 @@
-import hashlib
 import json
 import os
 import subprocess
@@ -14,6 +13,11 @@ from flask_limiter.util import get_remote_address
 
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN") or None
+
+try:
+    LOCK_TIME_MINUTES = float(os.environ.get("LOCK_TIME") or 60)
+except ValueError:
+    raise SystemExit("LOCK_TIME invalide dans .env : doit être un nombre de minutes.")
 
 BACKEND_DIR = os.path.join(os.path.dirname(__file__), "backend")
 DATA_PATH = os.path.join(BACKEND_DIR, "data.json")
@@ -34,7 +38,8 @@ ensure_data()
 
 NUM_FIELDS = 8
 GROUPS = [[0, 1, 2, 3], [4, 5, 6, 7]]
-LOCK_DURATION = timedelta(hours=1)
+GROUP_OF = {fid: gi for gi, fids in enumerate(GROUPS) for fid in fids}
+LOCK_DURATION = timedelta(minutes=LOCK_TIME_MINUTES)
 PERMANENT_LOCK = "9999-12-31T00:00:00+00:00"
 
 app = Flask(__name__, static_folder=STATIC_DIR, static_url_path="")
@@ -89,6 +94,15 @@ def save_data(data: dict) -> None:
     os.replace(tmp, DATA_PATH)
 
 
+def group_revealed(data: dict, fid: int) -> bool:
+    """
+    Un champ n'est révélé (vert) que si tout son groupe de 4 est résolu.
+    La persistance est indépendante : elle a lieu à chaque tentative, mais le
+    client n'apprend la correction champ par champ qu'une fois le groupe complet.
+    """
+    return all(data["fields"][x]["solved"] for x in GROUPS[GROUP_OF[fid]])
+
+
 def global_lock_active() -> datetime | None:
     if _global_locked_until and _global_locked_until > now_utc():
         return _global_locked_until
@@ -120,15 +134,22 @@ def api_state():
         lu = parse_iso(f.get("locked_until"))
         if lu and lu <= now:
             lu = None
-        entry = {"id": fid, "solved": f["solved"], "locked_until": iso(lu)}
-        if f["solved"] and f.get("value"):
+        entry = {
+            "id": fid,
+            # masqué tant que le groupe n'est pas complet
+            "solved": bool(f["solved"]) and group_revealed(data, fid),
+            "locked_until": iso(lu),
+        }
+        # Dernière valeur soumise (rejouée dans le formulaire au rechargement).
+        # Ce n'est pas une fuite : c'est ce que l'utilisateur a lui-même tapé.
+        if f.get("value"):
             entry["value"] = f["value"]
         fields.append(entry)
     return jsonify(
         {
             "fields": fields,
             "groups": GROUPS,
-            "all_solved": all(x["solved"] for x in fields),
+            "all_solved": all(f["solved"] for f in data["fields"]),
             "global_locked_until": iso(global_lock_active()),
         }
     )
@@ -140,7 +161,11 @@ def api_check():
     """
     Batch. Body : {"fields": [{"field_id": int, "value": "X" | "XX"}, ...]}
     Une seule erreur dans le batch → verrou global 1h.
-    Champs déjà solved ou verrouillés (admin) → ignorés silencieusement.
+    Champs verrouillés (admin) → ignorés silencieusement.
+
+    Toute tentative évaluée est persistée dans data.json avant de répondre :
+    valeur soumise, statut solved, compteur et date de tentative. La règle de
+    groupe ne conditionne plus l'écriture, seulement ce qui est révélé au client.
     """
     global _global_locked_until
     payload = request.get_json(silent=True) or {}
@@ -169,63 +194,53 @@ def api_check():
         now = now_utc()
 
         results: dict[int, dict] = {}
-        correct_ids: list[int] = []
+        evaluated: list[int] = []
         wrong = False
 
         for fid, val in cleaned.items():
             f = data["fields"][fid]
-            if f["solved"]:
-                results[fid] = {"correct": True, "already_solved": True}
-                continue
             lu = parse_iso(f.get("locked_until"))
             if lu and lu > now:
                 results[fid] = {"skipped": True, "reason": "admin_locked"}
                 continue
-            candidate = hashlib.sha256((f["salt"] + val).encode("utf-8")).hexdigest()
-            if candidate == f["hash"]:
-                correct_ids.append(fid)
-                results[fid] = {"correct": True}
+
+            if f["solved"] and f.get("value") == val:
+                # Rien de nouveau à évaluer, on ne compte pas de tentative.
+                evaluated.append(fid)
+                results[fid] = {"correct": True, "already_solved": True}
+                continue
+
+            correct = val == f["answer"]
+            f["value"] = val
+            f["solved"] = correct
+            f["attempts"] = int(f.get("attempts") or 0) + 1
+            f["last_attempt_at"] = iso(now)
+            if correct:
+                f["locked_until"] = None
             else:
                 wrong = True
-                results[fid] = {"correct": False}
+            evaluated.append(fid)
+            results[fid] = {"correct": correct}
 
         response: dict = {"results": results}
 
         if wrong:
             _global_locked_until = now + LOCK_DURATION
             data["global_locked_until"] = iso(_global_locked_until)
-            save_data(data)
             response["global_locked"] = True
             response["global_retry_at"] = iso(_global_locked_until)
-            response["all_solved"] = all(x["solved"] for x in data["fields"])
-            return jsonify(response)
 
-        # Persistance atomique par groupe : on n'écrit que si le groupe est intégralement
-        # correct (batch + déjà solved en DB). Sinon les correctes restent en attente.
-        correct_set = set(correct_ids)
-        to_persist: list[int] = []
-        for group_fids in GROUPS:
-            group_complete = all(
-                (fid in correct_set or data["fields"][fid]["solved"])
-                for fid in group_fids
-            )
-            if group_complete:
-                for fid in group_fids:
-                    if fid in correct_set:
-                        to_persist.append(fid)
-
-        pending_set = correct_set - set(to_persist)
-        for fid in pending_set:
-            results[fid]["pending"] = True
-
-        if to_persist:
-            for fid in to_persist:
-                data["fields"][fid]["solved"] = True
-                data["fields"][fid]["locked_until"] = None
-                data["fields"][fid]["value"] = cleaned[fid]
+        # Écriture unique et atomique de tout ce qui vient d'être tenté.
+        if evaluated:
             save_data(data)
 
-        response["all_solved"] = all(x["solved"] for x in data["fields"])
+        # Masquage : un champ n'est révélé que si son groupe est intégralement
+        # résolu. Sinon on ne dit ni juste ni faux, seulement "en attente".
+        for fid in evaluated:
+            if not group_revealed(data, fid):
+                results[fid] = {"pending": True}
+
+        response["all_solved"] = all(f["solved"] for f in data["fields"])
         return jsonify(response)
 
 
@@ -284,6 +299,9 @@ def api_admin_state():
                 "solved": f["solved"],
                 "locked_until": lu,
                 "permanent": lu == PERMANENT_LOCK,
+                "value": f.get("value"),
+                "attempts": int(f.get("attempts") or 0),
+                "last_attempt_at": f.get("last_attempt_at"),
             }
         )
     gl = global_lock_active()
@@ -391,6 +409,8 @@ def api_admin_reset():
             f["solved"] = False
             f["value"] = None
             f["locked_until"] = None
+            f["attempts"] = 0
+            f["last_attempt_at"] = None
         data["global_locked_until"] = None
         save_data(data)
     _global_locked_until = None
