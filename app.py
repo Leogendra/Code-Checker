@@ -320,24 +320,24 @@ def api_admin_state():
 def api_admin_lock():
     """
     Verrouille manuellement des champs (ex : énigme pas encore révélée).
-    Body : {"field_ids": [int, ...], "hours": float|null}
-    hours=null (défaut) → verrou permanent (jusqu'à unlock explicite).
+    Body : {"field_ids": [int, ...], "minutes": float|null}
+    minutes=null (défaut) → verrou permanent (jusqu'à unlock explicite).
     """
     payload = request.get_json(silent=True) or {}
     ids = _validate_ids(payload.get("field_ids"))
     if isinstance(ids, tuple):
         return jsonify(ids[0]), ids[1]
-    hours = payload.get("hours")
-    if hours is None:
+    minutes = payload.get("minutes")
+    if minutes is None:
         until_iso = PERMANENT_LOCK
     else:
         try:
-            hours = float(hours)
+            minutes = float(minutes)
         except (TypeError, ValueError):
-            return jsonify({"error": "invalid hours"}), 400
-        if hours <= 0:
-            return jsonify({"error": "hours must be > 0"}), 400
-        until_iso = iso(now_utc() + timedelta(hours=hours))
+            return jsonify({"error": "invalid minutes"}), 400
+        if minutes <= 0:
+            return jsonify({"error": "minutes must be > 0"}), 400
+        until_iso = iso(now_utc() + timedelta(minutes=minutes))
 
     with _data_lock:
         data = load_data()
@@ -368,20 +368,20 @@ def api_admin_unlock():
 @limiter.limit("30 per minute")
 @require_admin
 def api_admin_global_lock():
-    """Force le verrou global. Body : {"hours": float | null}. null → permanent."""
+    """Force le verrou global. Body : {"minutes": float | null}. null → permanent."""
     global _global_locked_until
     payload = request.get_json(silent=True) or {}
-    hours = payload.get("hours")
-    if hours is None:
+    minutes = payload.get("minutes")
+    if minutes is None:
         _global_locked_until = datetime(9999, 12, 31, tzinfo=timezone.utc)
     else:
         try:
-            hours = float(hours)
+            minutes = float(minutes)
         except (TypeError, ValueError):
-            return jsonify({"error": "invalid hours"}), 400
-        if hours <= 0:
-            return jsonify({"error": "hours must be > 0"}), 400
-        _global_locked_until = now_utc() + timedelta(hours=hours)
+            return jsonify({"error": "invalid minutes"}), 400
+        if minutes <= 0:
+            return jsonify({"error": "minutes must be > 0"}), 400
+        _global_locked_until = now_utc() + timedelta(minutes=minutes)
     _persist_global_lock(_global_locked_until)
     return jsonify({"global_locked_until": iso(_global_locked_until)})
 
