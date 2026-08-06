@@ -106,6 +106,11 @@ function isGlobalLocked() {
     return !!(state.global_locked_until && new Date(state.global_locked_until).getTime() > Date.now());
 }
 
+function stripZeroPad(v) {
+    if (!v) return "";
+    return String(Number(v));
+}
+
 function isGroupSolved(gi) {
     return GROUPS[gi].every((fid) => state.fields[fid].solved);
 }
@@ -154,7 +159,6 @@ function applyBatchResult(data) {
         if (res.correct && !res.pending) {
             state.fields[fid].solved = true;
             state.fields[fid].locked_until = null;
-            state.fields[fid].value = String(state.fields[fid].value || "").padStart(2, "0");
         } else if (res.pending) {
             pendingCount++;
         }
@@ -179,9 +183,10 @@ async function loadState() {
             local.solved = f.solved;
             local.locked_until = f.locked_until;
             // On rejoue la dernière valeur soumise, sans écraser une saisie en cours
-            // (loadState est aussi appelé périodiquement).
-            if (f.solved) local.value = f.value || local.value || "";
-            else if (!local.value && f.value) local.value = f.value;
+            // (loadState est aussi appelé périodiquement). Le serveur renvoie toujours
+            // 2 chiffres ("02") ; on retire le zéro de tête pour l'affichage.
+            if (f.solved) local.value = stripZeroPad(f.value) || local.value || "";
+            else if (!local.value && f.value) local.value = stripZeroPad(f.value);
         });
         state.all_solved = data.all_solved;
         state.global_locked_until = data.global_locked_until;
@@ -255,7 +260,9 @@ function render() {
 function copyCoords() {
     const parts = [];
     GROUPS.forEach((ids) => {
-        const s = ids.map((i) => state.fields[i].value || "??").join("");
+        // Chaque champ doit peser 2 chiffres pour reconstruire la coordonnée,
+        // même si l'affichage n'a pas de zéro de tête.
+        const s = ids.map((i) => (state.fields[i].value ? String(state.fields[i].value).padStart(2, "0") : "??")).join("");
         parts.push(s.slice(0, 2) + "." + s.slice(2));
     });
     const txt = parts.join(", ");
