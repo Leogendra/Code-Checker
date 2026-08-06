@@ -199,9 +199,65 @@
             border-color: var(--glass-border-strong);
         }
 
-        .duration .hint {
+        /* utilisé dans la carte Durée et dans la carte Message */
+        .hint {
             font-size: 0.7rem;
             color: var(--muted);
+        }
+
+        .message-card {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            padding: 14px 18px;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 10px;
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+
+        .message-card label {
+            font-size: 0.7rem;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--muted);
+        }
+
+        .message-card input {
+            height: 38px;
+            padding: 0 12px;
+            background: transparent;
+            color: var(--text);
+            border: 1px solid var(--glass-border);
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-family: inherit;
+            outline: none;
+        }
+
+        .message-card input:focus {
+            border-color: var(--glass-border-strong);
+        }
+
+        .message-row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .message-row button {
+            padding: 8px 14px;
+            font-size: 0.7rem;
+            letter-spacing: 0.1em;
+        }
+
+        .message-current {
+            font-size: 0.75rem;
+            color: var(--muted);
+            min-height: 14px;
+            word-break: break-word;
         }
 
         .msg {
@@ -246,6 +302,18 @@
                 <span class="hint">minutes (vide = permanent)</span>
             </div>
 
+            <div class="message-card">
+                <label for="msg">Message joueur</label>
+                <input id="msg" type="text" maxlength="280" autocomplete="off"
+                    placeholder="affiché sous les champs (vide = aucun)" />
+                <div class="message-row">
+                    <button id="msg-send">Envoyer</button>
+                    <button id="msg-clear">Effacer</button>
+                    <span class="hint">masqué pendant un verrou global</span>
+                </div>
+                <div id="msg-current" class="message-current"></div>
+            </div>
+
             <div class="bulk">
                 <button id="refresh">Rafraîchir</button>
                 <button id="reset-btn">Reset champs</button>
@@ -271,6 +339,10 @@
             refresh: document.getElementById("refresh"),
             resetBtn: document.getElementById("reset-btn"),
             minutes: document.getElementById("minutes"),
+            msgInput: document.getElementById("msg"),
+            msgSend: document.getElementById("msg-send"),
+            msgClear: document.getElementById("msg-clear"),
+            msgCurrent: document.getElementById("msg-current"),
             globalCard: document.getElementById("global-card"),
             globalStatus: document.getElementById("global-status"),
             globalLockBtn: document.getElementById("global-lock-btn"),
@@ -412,11 +484,28 @@
             });
         }
 
+        function renderMessage(msg) {
+            els.msgCurrent.textContent = msg ? `Affiché : « ${msg} »` : "Aucun message affiché.";
+            // Ne pas écraser une saisie en cours (refresh tourne toutes les 15s).
+            if (document.activeElement !== els.msgInput) els.msgInput.value = msg || "";
+        }
+
+        async function sendMessage(text) {
+            try {
+                const data = await api("POST", "/api/admin/message", { message: text });
+                renderMessage(data.message);
+                setMsg(data.message ? "Message publié." : "Message effacé.");
+            } catch (e) {
+                if (e.message !== "unauthorized") setMsg("Erreur : " + e.message, true);
+            }
+        }
+
         async function refresh() {
             try {
                 const data = await api("GET", "/api/admin/state");
                 renderGlobal(data);
                 renderRows(data);
+                renderMessage(data.message);
                 setMsg("");
             } catch (e) {
                 if (e.message !== "unauthorized") setMsg("Erreur : " + e.message, true);
@@ -502,10 +591,15 @@
         els.globalUnlockBtn.addEventListener("click", globalUnlock);
         els.refresh.addEventListener("click", refresh);
         els.resetBtn.addEventListener("click", resetFields);
+        els.msgSend.addEventListener("click", () => sendMessage(els.msgInput.value.trim()));
+        els.msgClear.addEventListener("click", () => { els.msgInput.value = ""; sendMessage(""); });
+        els.msgInput.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") sendMessage(els.msgInput.value.trim());
+        });
 
         if (getToken()) {
             api("GET", "/api/admin/state").then(
-                (data) => { showPanel(); renderGlobal(data); renderRows(data); },
+                (data) => { showPanel(); renderGlobal(data); renderRows(data); renderMessage(data.message); },
                 () => { /* showLogin déjà appelée si 401 */ }
             );
         } else {

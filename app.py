@@ -42,6 +42,7 @@ GROUPS = [[0], [1, 2, 3], [4], [5, 6, 7]]
 GROUP_OF = {fid: gi for gi, fids in enumerate(GROUPS) for fid in fids}
 LOCK_DURATION = timedelta(minutes=LOCK_TIME_MINUTES)
 PERMANENT_LOCK = "9999-12-31T00:00:00+00:00"
+MESSAGE_MAX_LEN = 280
 
 app = Flask(__name__, static_folder=STATIC_DIR, static_url_path="")
 limiter = Limiter(get_remote_address, app=app, default_limits=["60 per minute"])
@@ -152,6 +153,10 @@ def api_state():
             "groups": GROUPS,
             "all_solved": all(f["solved"] for f in data["fields"]),
             "global_locked_until": iso(global_lock_active()),
+            # Message libre de l'admin. Envoyé même sous verrou : c'est le front
+            # qui le masque pendant le décompte, pour réagir dès la seconde où
+            # le verrou tombe sans attendre le prochain /api/state.
+            "message": data.get("message") or None,
         }
     )
 
@@ -311,8 +316,33 @@ def api_admin_state():
             "fields": fields,
             "all_solved": all(f["solved"] for f in fields),
             "global_locked_until": iso(gl),
+            "message": data.get("message") or None,
         }
     )
+
+
+@app.post("/api/admin/message")
+@limiter.limit("30 per minute")
+@require_admin
+def api_admin_message():
+    """
+    Message libre affiché sous les champs côté joueur.
+    Body : {"message": str | null}. Vide ou null → message effacé.
+    Le front ne l'affiche pas pendant un verrou global.
+    """
+    payload = request.get_json(silent=True) or {}
+    msg = payload.get("message")
+    if msg is None:
+        msg = ""
+    if not isinstance(msg, str):
+        return jsonify({"error": "invalid message"}), 400
+    msg = msg.strip()[:MESSAGE_MAX_LEN]
+
+    with _data_lock:
+        data = load_data()
+        data["message"] = msg or None
+        save_data(data)
+    return jsonify({"message": msg or None})
 
 
 @app.post("/api/admin/lock")

@@ -25,6 +25,7 @@ const state = {
     })),
     all_solved: false,
     global_locked_until: null,
+    message: null, // message libre de l'admin
 };
 
 const els = {
@@ -408,7 +409,26 @@ function applyBatchResult(data) {
     }
 }
 
+/* ---------- Zone #status : messages locaux + message de l'admin ---------- */
+
+// Les deux se partagent la même div. Un message local (copie, erreur réseau…)
+// passe devant, mais expire : sans ça il masquerait le message admin pour de bon.
+const STATUS_TTL_MS = 6000;
+let localStatus = "";
+let localStatusUntil = 0;
+
 function setStatus(msg) {
+    localStatus = msg || "";
+    localStatusUntil = msg ? Date.now() + STATUS_TTL_MS : 0;
+    renderStatus();
+}
+
+function renderStatus() {
+    let msg = "";
+    if (localStatus && Date.now() < localStatusUntil) msg = localStatus;
+    // Message admin caché pendant le décompte : on ne parle pas par-dessus le verrou.
+    else if (state.message && !isGlobalLocked()) msg = state.message;
+
     els.status.style.display = msg ? "block" : "none";
     els.status.textContent = msg;
 }
@@ -430,6 +450,7 @@ async function loadState() {
         applyGroups(data.groups);
         state.all_solved = data.all_solved;
         state.global_locked_until = data.global_locked_until;
+        state.message = data.message || null;
         render();
     } catch (e) {
         setStatus("Check ta connexion pelo.");
@@ -490,7 +511,7 @@ function render() {
     els.globalLock.classList.toggle("visible", gl && showVerdict);
     if (gl && showVerdict) {
         const ms = new Date(state.global_locked_until).getTime() - Date.now();
-        els.globalLock.innerHTML = `<div class="label">...</div><div class="countdown">${fmtCountdown(ms)}</div>`;
+        els.globalLock.innerHTML = `<div class="label">Reviens plus tard</div><div class="countdown">${fmtCountdown(ms)}</div>`;
     } else {
         els.globalLock.innerHTML = "";
     }
@@ -501,6 +522,8 @@ function render() {
     const won = state.all_solved && showVerdict;
     els.submitRow.style.display = won ? "none" : "flex";
     if (won) revealFinal();
+
+    renderStatus();
 }
 
 function copyText(txt) {

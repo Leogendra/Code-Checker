@@ -26,6 +26,7 @@ for part in ANSWER.split(","):
     ANSWER_PIECES.append(part2[4:6])
 
 FINAL = {
+    "coords": ANSWER,
     "maps_url": f"https://www.google.com/maps/?q={ANSWER}",
     "note": "C'est l'heure de se rendre aux coordonnées...",
 }
@@ -50,7 +51,12 @@ def build_data() -> dict:
                 "last_attempt_at": None,
             }
         )
-    return {"fields": fields, "final": FINAL, "global_locked_until": None}
+    return {
+        "fields": fields,
+        "final": FINAL,
+        "global_locked_until": None,
+        "message": None,  # message libre de l'admin, affiché sous les champs
+    }
 
 
 def main() -> None:
