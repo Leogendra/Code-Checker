@@ -1,5 +1,15 @@
 const NUM_FIELDS = 8;
-const GROUPS = [[0, 1, 2, 3], [4, 5, 6, 7]];
+
+// Mise en page GPS : deux blocs de 4 champs séparés par un point.
+// Purement visuel — n'a aucun rapport avec les groupes logiques du serveur.
+const LAYOUT = [[0, 1, 2, 3], [4, 5, 6, 7]];
+
+// Groupes logiques (règle de révélation), fournis par GET /api/state.
+// Le serveur est seul maître de ce découpage : on ne le devine jamais ici.
+let groups = LAYOUT.flat().map((fid) => [fid]); // repli : chaque champ seul
+let groupOf = Object.fromEntries(groups.map((ids, gi) => ids.map((fid) => [fid, gi])).flat());
+
+const LONG_PRESS_MS = 350; // maintien tactile pour afficher le groupe
 
 // Animations : durées alignées sur les keyframes de style.css
 const FX_STAGGER_MS = 1000; // décalage entre deux champs (gauche → droite)
@@ -30,17 +40,17 @@ const els = {
 
 function buildLayout() {
     els.coords.innerHTML = "";
-    GROUPS.forEach((groupIds, gi) => {
-        const groupEl = document.createElement("div");
-        groupEl.className = "group";
-        groupEl.dataset.group = String(gi);
+    LAYOUT.forEach((partIds, pi) => {
+        const partEl = document.createElement("div");
+        partEl.className = "part";
+        partEl.dataset.part = String(pi);
 
-        groupIds.forEach((fid, pos) => {
+        partIds.forEach((fid, pos) => {
             if (pos === 1) {
                 const dot = document.createElement("span");
                 dot.className = "dot";
                 dot.textContent = ".";
-                groupEl.appendChild(dot);
+                partEl.appendChild(dot);
             }
             const cell = document.createElement("div");
             cell.className = "cell";
@@ -65,15 +75,49 @@ function buildLayout() {
 
             cell.appendChild(input);
             cell.appendChild(fx);
-            groupEl.appendChild(cell);
+            bindGroupHint(cell);
+            partEl.appendChild(cell);
         });
 
-        els.coords.appendChild(groupEl);
+        els.coords.appendChild(partEl);
     });
+
+    els.groupTip = document.createElement("div");
+    els.groupTip.className = "group-tip";
+    els.groupTip.setAttribute("role", "tooltip");
+    document.querySelector(".coords-wrap").appendChild(els.groupTip);
+
+    applyGroups(groups);
+}
+
+/**
+ * Adopte le découpage en groupes envoyé par le serveur et l'inscrit dans le DOM
+ * (data-group par cellule). Toute forme invalide retombe sur « chaque champ
+ * seul », qui ne promet jamais un regroupement inexistant.
+ */
+function applyGroups(serverGroups) {
+    const valid =
+        Array.isArray(serverGroups) &&
+        serverGroups.length > 0 &&
+        serverGroups.every((ids) => Array.isArray(ids) && ids.length > 0 &&
+            ids.every((fid) => Number.isInteger(fid) && fid >= 0 && fid < NUM_FIELDS)) &&
+        serverGroups.flat().slice().sort((a, b) => a - b).join(",") ===
+            Array.from({ length: NUM_FIELDS }, (_, i) => i).join(",");
+
+    groups = valid ? serverGroups.map((ids) => ids.slice().sort((a, b) => a - b))
+                   : Array.from({ length: NUM_FIELDS }, (_, i) => [i]);
+    groupOf = {};
+    groups.forEach((ids, gi) => ids.forEach((fid) => { groupOf[fid] = gi; }));
+
+    groups.forEach((ids, gi) => ids.forEach((fid) => {
+        const cell = cellOf(fid);
+        if (cell) cell.dataset.group = String(gi);
+    }));
 }
 
 function onInput(e) {
     const el = e.target;
+    hideGroupHint();
     el.value = el.value.replace(/\D/g, "").slice(0, 2);
     state.fields[Number(el.dataset.field)].value = el.value;
     if (el.value.length === 2) {
@@ -125,12 +169,78 @@ function stripZeroPad(v) {
     return String(Number(v));
 }
 
-function isGroupSolved(gi) {
-    return GROUPS[gi].every((fid) => state.fields[fid].solved);
-}
-
 function cellOf(fid) {
     return document.querySelector(`.cell[data-field="${fid}"]`);
+}
+
+/* ---------- Indicateur de groupe ---------- */
+
+let hintTimer = null;
+let hintedGroup = null;
+
+function showGroupHint(fid) {
+    const gi = groupOf[fid];
+    if (gi === undefined || gi === hintedGroup) return;
+    hideGroupHint();
+    hintedGroup = gi;
+
+    const ids = groups[gi];
+    const cells = ids.map(cellOf).filter(Boolean);
+    if (!cells.length) return;
+    cells.forEach((c) => c.classList.add("group-hl"));
+
+    els.groupTip.textContent =
+        ids.length > 1
+            ? `${ids.length} champs seront révélés ensemble`
+            : "Ce champ sera révélé seul";
+
+    // Centré sous l'emprise horizontale du groupe (qui peut chevaucher les deux
+    // blocs GPS), puis borné pour ne pas sortir de la zone des champs.
+    const wrap = document.querySelector(".coords-wrap").getBoundingClientRect();
+    const rects = cells.map((c) => c.getBoundingClientRect());
+    const left = Math.min(...rects.map((r) => r.left));
+    const right = Math.max(...rects.map((r) => r.right));
+    const center = (left + right) / 2 - wrap.left;
+
+    els.groupTip.classList.add("visible");
+    const half = els.groupTip.offsetWidth / 2;
+    els.groupTip.style.left = `${Math.min(Math.max(center, half), wrap.width - half)}px`;
+}
+
+function hideGroupHint() {
+    if (hintTimer) { clearTimeout(hintTimer); hintTimer = null; }
+    if (hintedGroup === null) return;
+    hintedGroup = null;
+    document.querySelectorAll(".cell.group-hl").forEach((c) => c.classList.remove("group-hl"));
+    els.groupTip.classList.remove("visible");
+}
+
+function bindGroupHint(cell) {
+    const fid = Number(cell.dataset.field);
+
+    // Souris : survol immédiat. Tactile / stylet : maintien.
+    cell.addEventListener("pointerenter", (e) => {
+        if (e.pointerType === "mouse") showGroupHint(fid);
+    });
+    cell.addEventListener("pointerdown", (e) => {
+        if (e.pointerType === "mouse") return;
+        hintTimer = setTimeout(() => {
+            hintTimer = null;
+            showGroupHint(fid);
+        }, LONG_PRESS_MS);
+    });
+
+    cell.addEventListener("pointerleave", hideGroupHint);
+    cell.addEventListener("pointercancel", hideGroupHint);
+    // Au relâchement seulement pour le tactile : sur souris, un clic ne doit pas
+    // faire disparaître l'indicateur alors que le pointeur est toujours dessus.
+    cell.addEventListener("pointerup", (e) => {
+        if (e.pointerType !== "mouse") hideGroupHint();
+    });
+    // Un maintien tactile ne doit pas ouvrir le menu contextuel du navigateur.
+    cell.addEventListener("contextmenu", (e) => {
+        if (hintedGroup !== null) e.preventDefault();
+    });
 }
 
 let fxTimers = [];
@@ -148,7 +258,7 @@ function clearFx() {
 
 /**
  * Traduit la réponse serveur en étapes d'animation, de gauche à droite.
- * Le serveur ne dit "correct" que si le groupe de 4 est complet ; sinon on ne
+ * Le serveur ne dit "correct" que si le groupe entier est résolu ; sinon on ne
  * sait rien du champ ({pending}) et on n'anime pas. Un verrou global signifie
  * qu'au moins une réponse du lot est fausse, sans dire laquelle : tous les
  * champs soumis non révélés tremblent donc, ce qui ne divulgue rien.
@@ -200,6 +310,7 @@ function runFxSequence(steps) {
 
 async function submitAll() {
     if (isGlobalLocked()) return;
+    hideGroupHint(); // ne pas superposer le surlignage à la séquence d'animation
 
     const payload = [];
     state.fields.forEach((f) => {
@@ -275,6 +386,7 @@ async function loadState() {
             if (f.solved) local.value = stripZeroPad(f.value) || local.value || "";
             else if (!local.value && f.value) local.value = stripZeroPad(f.value);
         });
+        applyGroups(data.groups);
         state.all_solved = data.all_solved;
         state.global_locked_until = data.global_locked_until;
         render();
@@ -326,11 +438,6 @@ function render() {
         }
     });
 
-    GROUPS.forEach((_, gi) => {
-        const groupEl = document.querySelector(`.group[data-group="${gi}"]`);
-        groupEl.classList.toggle("revealed", isGroupSolved(gi));
-    });
-
     els.globalLock.classList.toggle("visible", gl);
     if (gl) {
         const ms = new Date(state.global_locked_until).getTime() - Date.now();
@@ -349,7 +456,7 @@ function render() {
 
 function copyCoords() {
     const parts = [];
-    GROUPS.forEach((ids) => {
+    LAYOUT.forEach((ids) => {
         // Chaque champ doit peser 2 chiffres pour reconstruire la coordonnée,
         // même si l'affichage n'a pas de zéro de tête.
         const s = ids.map((i) => (state.fields[i].value ? String(state.fields[i].value).padStart(2, "0") : "??")).join("");

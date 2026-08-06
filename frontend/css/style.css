@@ -8,6 +8,10 @@
     --accent: #5e5c6a;
     --ok: #4ade80;
     --ko: #f87171;
+    /* indicateur de groupe : volontairement ni vert ni rouge pour ne pas
+       se confondre avec les états résolu / verrouillé */
+    --hl: #7dd3fc;
+    --hl-border: rgba(125, 211, 252, 0.4);
 }
 
 * {
@@ -89,7 +93,9 @@ body {
     gap: 32px;
 }
 
-.group {
+/* Bloc visuel du format GPS (partie entière + décimales), sans lien avec les
+   groupes logiques du serveur : ceux-ci sont portés par .cell[data-group]. */
+.part {
     display: flex;
     align-items: center;
     gap: 8px;
@@ -134,9 +140,6 @@ body {
 
 .cell.solved input {
     cursor: default;
-}
-
-.group.revealed .cell.solved input {
     color: var(--ok);
     -webkit-text-fill-color: var(--ok);
     border-color: rgba(74, 222, 128, 0.25);
@@ -150,6 +153,80 @@ body {
 .cell.admin-locked input {
     color: var(--muted);
     opacity: 0.4;
+}
+
+/* ============================================================
+   Indicateur de groupe (survol souris / maintien tactile)
+   ============================================================ */
+
+/* Un input désactivé n'émet aucun événement pointeur : on laisse passer le
+   pointeur jusqu'à .cell pour que l'indicateur marche aussi sous verrou. */
+.cell input:disabled {
+    pointer-events: none;
+}
+
+/* Anneau dessiné autour du champ, en dehors de sa boîte : aucun conflit avec
+   les bordures d'état (vert / rouge) ni avec les keyframes d'animation. */
+.cell::after {
+    content: "";
+    position: absolute;
+    inset: -6px;
+    border: 2px solid transparent;
+    border-radius: 15px;
+    pointer-events: none;
+    z-index: 2;
+    transition: border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.cell.group-hl::after {
+    border-color: var(--hl);
+    box-shadow: 0 0 0 1px rgba(125, 211, 252, 0.18), 0 0 16px rgba(125, 211, 252, 0.28);
+}
+
+/* évite la bulle de sélection iOS sur un maintien long */
+.cell input {
+    -webkit-touch-callout: none;
+}
+
+/* Placé au-dessus des champs (JS ajuste `bottom` pour se poser au-dessus du
+   compteur quand celui-ci est affiché, plutôt que de le chevaucher). */
+.group-tip {
+    position: absolute;
+    bottom: calc(100% + 14px);
+    transform: translateX(-50%);
+    white-space: nowrap;
+    padding: 8px 14px;
+    background: rgba(10, 14, 22, 0.96);
+    border: 1px solid var(--hl-border);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: "SF Mono", "Consolas", monospace;
+    font-size: 0.74rem;
+    letter-spacing: 0.02em;
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.16s ease;
+    z-index: 6;
+}
+
+.group-tip.visible {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* petite flèche pointant vers les champs */
+.group-tip::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 100%;
+    width: 8px;
+    height: 8px;
+    background: rgba(10, 14, 22, 0.96);
+    border-right: 1px solid var(--hl-border);
+    border-bottom: 1px solid var(--hl-border);
+    transform: translate(-50%, -50%) rotate(45deg);
 }
 
 /* ============================================================
@@ -190,8 +267,8 @@ body {
 
 /* Tant que la séquence gauche→droite n'a pas atteint ce champ, on gèle son
    apparence : le vert / rouge n'apparaît qu'au moment de son animation.
-   (!important car .group.revealed .cell.solved input est plus spécifique ;
-   l'animation, elle, passe devant car JS retire data-fx juste avant.) */
+   (!important pour battre .cell.solved / .cell.locked input ; l'animation,
+   elle, passe devant car JS retire data-fx juste avant de la lancer.) */
 .cell[data-fx="pending"] input {
     color: var(--text) !important;
     -webkit-text-fill-color: var(--text) !important;
@@ -257,7 +334,7 @@ body {
         transform: rotate(1deg) scale(0.998);
     }
 
-    /* état final = exactement le style .group.revealed .cell.solved */
+    /* état final = exactement le style .cell.solved input */
     100% {
         transform: rotate(0deg) scale(1);
         border-color: rgba(74, 222, 128, 0.25);
@@ -379,7 +456,7 @@ body {
 }
 
 .dot {
-    font-family: "Merkur" !important;
+    font-family: "Roboto" !important;
     font-size: 2rem;
     font-weight: 700;
     color: var(--accent);

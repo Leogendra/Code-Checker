@@ -37,7 +37,8 @@ def ensure_data() -> None:
 ensure_data()
 
 NUM_FIELDS = 8
-GROUPS = [[0, 1, 2, 3], [4, 5, 6, 7]]
+# GROUPS = [[0, 1, 2, 3], [4, 5, 6, 7]]
+GROUPS = [[0], [1, 2, 3], [4], [5, 6, 7]]
 GROUP_OF = {fid: gi for gi, fids in enumerate(GROUPS) for fid in fids}
 LOCK_DURATION = timedelta(minutes=LOCK_TIME_MINUTES)
 PERMANENT_LOCK = "9999-12-31T00:00:00+00:00"
