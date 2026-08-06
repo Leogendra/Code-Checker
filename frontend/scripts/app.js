@@ -1,6 +1,11 @@
 const NUM_FIELDS = 8;
 const GROUPS = [[0, 1, 2, 3], [4, 5, 6, 7]];
 
+// Animations : durées alignées sur les keyframes de style.css
+const FX_STAGGER_MS = 1000; // décalage entre deux champs (gauche → droite)
+const FX_SUCCESS_MS = 1800;
+const FX_FAIL_MS = 520;
+
 const state = {
     fields: Array.from({ length: NUM_FIELDS }, (_, i) => ({
         id: i,
@@ -50,7 +55,16 @@ function buildLayout() {
             input.addEventListener("input", onInput);
             input.addEventListener("keydown", onKey);
 
+            const fx = document.createElement("span");
+            fx.className = "lock-fx";
+            fx.setAttribute("aria-hidden", "true");
+            fx.innerHTML =
+                '<span class="dial"></span>' +
+                '<span class="ring ring-inner"></span>' +
+                '<span class="ring ring-outer"></span>';
+
             cell.appendChild(input);
+            cell.appendChild(fx);
             groupEl.appendChild(cell);
         });
 
@@ -115,6 +129,75 @@ function isGroupSolved(gi) {
     return GROUPS[gi].every((fid) => state.fields[fid].solved);
 }
 
+function cellOf(fid) {
+    return document.querySelector(`.cell[data-field="${fid}"]`);
+}
+
+let fxTimers = [];
+let fxRunningUntil = 0;
+
+function clearFx() {
+    fxTimers.forEach(clearTimeout);
+    fxTimers = [];
+    fxRunningUntil = 0;
+    document.querySelectorAll(".cell").forEach((cell) => {
+        cell.classList.remove("unlocking", "shaking");
+        delete cell.dataset.fx;
+    });
+}
+
+/**
+ * Traduit la réponse serveur en étapes d'animation, de gauche à droite.
+ * Le serveur ne dit "correct" que si le groupe de 4 est complet ; sinon on ne
+ * sait rien du champ ({pending}) et on n'anime pas. Un verrou global signifie
+ * qu'au moins une réponse du lot est fausse, sans dire laquelle : tous les
+ * champs soumis non révélés tremblent donc, ce qui ne divulgue rien.
+ */
+function computeFxSteps(data, submittedIds) {
+    const results = data.results || {};
+    const steps = [];
+    submittedIds.forEach((fid) => {
+        const res = results[fid] ?? results[String(fid)];
+        if (!res || res.skipped) return;
+        if (res.correct && !res.pending) steps.push({ fid, kind: "success" });
+        else if (data.global_locked) steps.push({ fid, kind: "fail" });
+    });
+    return steps.sort((a, b) => a.fid - b.fid);
+}
+
+// Gèle l'apparence des champs concernés avant le render(), pour que le
+// vert / rouge n'apparaisse qu'au moment de l'animation de chaque champ.
+function markFxPending(steps) {
+    clearFx();
+    steps.forEach(({ fid }) => {
+        const cell = cellOf(fid);
+        if (cell) cell.dataset.fx = "pending";
+    });
+}
+
+function runFxSequence(steps) {
+    if (!steps.length) return;
+    const last = steps[steps.length - 1];
+    fxRunningUntil =
+        Date.now() +
+        (steps.length - 1) * FX_STAGGER_MS +
+        (last.kind === "success" ? FX_SUCCESS_MS : FX_FAIL_MS);
+
+    steps.forEach(({ fid, kind }, i) => {
+        const start = setTimeout(() => {
+            const cell = cellOf(fid);
+            if (!cell) return;
+            delete cell.dataset.fx; // libère le style final (vert / rouge)
+            cell.classList.add(kind === "success" ? "unlocking" : "shaking");
+            const end = setTimeout(() => {
+                cell.classList.remove("unlocking", "shaking");
+            }, (kind === "success" ? FX_SUCCESS_MS : FX_FAIL_MS) + 60);
+            fxTimers.push(end);
+        }, i * FX_STAGGER_MS);
+        fxTimers.push(start);
+    });
+}
+
 async function submitAll() {
     if (isGlobalLocked()) return;
 
@@ -130,6 +213,7 @@ async function submitAll() {
     }
 
     els.submitBtn.disabled = true;
+    let steps = [];
     try {
         const r = await fetch("/api/check", {
             method: "POST",
@@ -141,14 +225,17 @@ async function submitAll() {
             setStatus("Erreur : " + data.error);
             return;
         }
+        steps = computeFxSteps(data, payload.map((p) => p.field_id));
+        markFxPending(steps);
         applyBatchResult(data);
         if (data.all_solved) state.all_solved = true;
-    } 
+    }
     catch (err) {
         setStatus("Erreur réseau.");
-    } 
+    }
     finally {
         render();
+        runFxSequence(steps);
     }
 }
 
@@ -254,7 +341,10 @@ function render() {
         els.submitBtn.disabled = false;
     }
 
-    els.actions.style.display = state.all_solved ? "flex" : "none";
+    // On attend la fin de la séquence d'ouverture avant de proposer les actions,
+    // pour ne pas court-circuiter l'effet de reveal.
+    els.actions.style.display =
+        state.all_solved && Date.now() >= fxRunningUntil ? "flex" : "none";
 }
 
 function copyCoords() {

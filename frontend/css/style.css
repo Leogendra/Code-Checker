@@ -73,6 +73,14 @@ body {
     width: fit-content;
 }
 
+/* Conteneur d'ancrage : le compteur est posé au-dessus des inputs en absolu,
+   donc son apparition ne décale jamais la grille de champs. */
+.coords-wrap {
+    position: relative;
+    display: flex;
+    justify-content: center;
+}
+
 .coords {
     display: flex;
     flex-wrap: wrap;
@@ -88,6 +96,7 @@ body {
 }
 
 .cell {
+    position: relative;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -95,6 +104,8 @@ body {
 }
 
 .cell input {
+    position: relative;
+    z-index: 1;
     width: 56px;
     height: 64px;
     font-size: 1.6rem;
@@ -141,8 +152,234 @@ body {
     opacity: 0.4;
 }
 
+/* ============================================================
+   Animations de serrure
+   ============================================================ */
+
+/* Calque décoratif derrière l'input : le cylindre qui tourne
+   et les cercles qui s'ouvrent vers l'extérieur. */
+.lock-fx {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    pointer-events: none;
+    z-index: 0;
+}
+
+.lock-fx > * {
+    position: absolute;
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    border-radius: 50%;
+    opacity: 0;
+}
+
+.lock-fx .dial {
+    background: conic-gradient(from 0deg,
+            rgba(74, 222, 128, 0) 0deg,
+            rgba(74, 222, 128, 0.38) 65deg,
+            rgba(74, 222, 128, 0) 145deg,
+            rgba(74, 222, 128, 0.24) 240deg,
+            rgba(74, 222, 128, 0) 325deg);
+}
+
+.lock-fx .ring {
+    border: 2px solid rgba(74, 222, 128, 0.55);
+}
+
+/* Tant que la séquence gauche→droite n'a pas atteint ce champ, on gèle son
+   apparence : le vert / rouge n'apparaît qu'au moment de son animation.
+   (!important car .group.revealed .cell.solved input est plus spécifique ;
+   l'animation, elle, passe devant car JS retire data-fx juste avant.) */
+.cell[data-fx="pending"] input {
+    color: var(--text) !important;
+    -webkit-text-fill-color: var(--text) !important;
+    border-color: var(--glass-border) !important;
+    box-shadow: none !important;
+}
+
+/* ---- Réussite : la serrure cède et s'ouvre ---- */
+
+.cell.unlocking input {
+    animation: lock-open 1800ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes lock-open {
+    0% {
+        transform: rotate(0deg) scale(1);
+        border-color: var(--glass-border);
+        background: var(--glass-bg);
+        color: var(--text);
+        -webkit-text-fill-color: var(--text);
+        box-shadow: 0 0 0 0 rgba(74, 222, 128, 0);
+    }
+
+    14% {
+        transform: rotate(-6deg) scale(0.955);
+        border-color: var(--glass-border-strong);
+        color: var(--text);
+        -webkit-text-fill-color: var(--text);
+    }
+
+    28% {
+        transform: rotate(-8.5deg) scale(0.945);
+        border-color: var(--glass-border-strong);
+        color: var(--text);
+        -webkit-text-fill-color: var(--text);
+    }
+
+    /* le pêne cède */
+    46% {
+        transform: rotate(4deg) scale(1.035);
+        border-color: rgba(74, 222, 128, 0.6);
+        background: rgba(74, 222, 128, 0.07);
+        box-shadow: 0 0 18px 2px rgba(74, 222, 128, 0.18);
+    }
+
+    /* ouverture franche */
+    64% {
+        transform: rotate(6deg) scale(1.075);
+        border-color: rgba(74, 222, 128, 0.75);
+        background: rgba(74, 222, 128, 0.09);
+        color: var(--ok);
+        -webkit-text-fill-color: var(--ok);
+        box-shadow: 0 0 26px 4px rgba(74, 222, 128, 0.22);
+    }
+
+    80% {
+        transform: rotate(-2.5deg) scale(1.015);
+        color: var(--ok);
+        -webkit-text-fill-color: var(--ok);
+    }
+
+    92% {
+        transform: rotate(1deg) scale(0.998);
+    }
+
+    /* état final = exactement le style .group.revealed .cell.solved */
+    100% {
+        transform: rotate(0deg) scale(1);
+        border-color: rgba(74, 222, 128, 0.25);
+        background: var(--glass-bg);
+        color: var(--ok);
+        -webkit-text-fill-color: var(--ok);
+        box-shadow: 0 0 0 0 rgba(74, 222, 128, 0);
+    }
+}
+
+.cell.unlocking .dial {
+    animation: lock-dial 1800ms cubic-bezier(0.33, 0, 0.2, 1) forwards;
+}
+
+@keyframes lock-dial {
+    0% {
+        opacity: 0;
+        transform: rotate(0deg) scale(0.55);
+    }
+
+    22% {
+        opacity: 0.85;
+        transform: rotate(-28deg) scale(0.78);
+    }
+
+    64% {
+        opacity: 0.7;
+        transform: rotate(155deg) scale(1.08);
+    }
+
+    100% {
+        opacity: 0;
+        transform: rotate(220deg) scale(1.4);
+    }
+}
+
+/* Les deux cercles s'ouvrent vers l'extérieur, décalés dans le temps */
+.cell.unlocking .ring-inner {
+    --ring-to: 1.85;
+    animation: lock-ring 1000ms cubic-bezier(0.16, 0.84, 0.24, 1) 380ms forwards;
+}
+
+.cell.unlocking .ring-outer {
+    --ring-to: 2.7;
+    animation: lock-ring 1150ms cubic-bezier(0.16, 0.84, 0.24, 1) 560ms forwards;
+}
+
+@keyframes lock-ring {
+    0% {
+        opacity: 0;
+        transform: scale(0.35);
+        border-width: 3px;
+    }
+
+    28% {
+        opacity: 0.8;
+    }
+
+    100% {
+        opacity: 0;
+        transform: scale(var(--ring-to, 2.2));
+        border-width: 1px;
+    }
+}
+
+/* ---- Échec : la serrure ne cède pas ---- */
+
+.cell.shaking input {
+    animation: lock-shake 520ms cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
+@keyframes lock-shake {
+    0% {
+        transform: translateX(0) rotate(0deg);
+        border-color: rgba(248, 113, 113, 0.7);
+        box-shadow: 0 0 16px 1px rgba(248, 113, 113, 0.18);
+    }
+
+    12% {
+        transform: translateX(-6px) rotate(-2deg);
+    }
+
+    26% {
+        transform: translateX(5px) rotate(1.6deg);
+    }
+
+    40% {
+        transform: translateX(-5px) rotate(-1.4deg);
+    }
+
+    54% {
+        transform: translateX(4px) rotate(1.1deg);
+    }
+
+    68% {
+        transform: translateX(-3px) rotate(-0.7deg);
+    }
+
+    82% {
+        transform: translateX(2px) rotate(0.4deg);
+    }
+
+    /* état final = exactement le style .cell.locked, rien d'autre que le rouge */
+    100% {
+        transform: translateX(0) rotate(0deg);
+        border-color: rgba(248, 113, 113, 0.25);
+        box-shadow: 0 0 0 0 rgba(248, 113, 113, 0);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .cell.unlocking input,
+    .cell.shaking input,
+    .cell.unlocking .dial,
+    .cell.unlocking .ring {
+        animation-duration: 1ms;
+        animation-delay: 0ms;
+    }
+}
+
 .dot {
-    font-family: "SF Mono", "Consolas", monospace !important;
+    font-family: "Merkur" !important;
     font-size: 2rem;
     font-weight: 700;
     color: var(--accent);
@@ -238,7 +475,12 @@ button:disabled {
 }
 
 .global-lock {
-    padding: 16px 28px;
+    position: absolute;
+    left: 50%;
+    bottom: calc(100% + 20px);
+    transform: translateX(-50%);
+    white-space: nowrap;
+    padding: 12px 24px;
     background: var(--glass-bg);
     border: 1px solid rgba(248, 113, 113, 0.25);
     border-radius: 10px;
@@ -261,10 +503,10 @@ button:disabled {
 }
 
 .global-lock .countdown {
-    margin-top: 6px;
+    margin-top: 4px;
     /* font-family: "SF Mono", "Consolas", monospace; */
     font-variant-numeric: tabular-nums;
-    font-size: 1.8rem;
+    font-size: 1.6rem;
     letter-spacing: 0.08em;
 }
 
