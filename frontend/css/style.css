@@ -112,7 +112,8 @@ body {
 .cell input {
     position: relative;
     z-index: 1;
-    width: 56px;
+    width: calc(var(--field-length, 2) * 20px + 16px);
+    min-width: 36px;
     height: 64px;
     font-size: 1.6rem;
     text-align: center;
@@ -615,7 +616,8 @@ button:disabled {
     }
 
     .cell input {
-        width: 48px;
+        width: calc(var(--field-length, 2) * 17px + 14px);
+        min-width: 31px;
         height: 56px;
         font-size: 1.4rem;
     }

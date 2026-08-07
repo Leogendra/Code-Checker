@@ -33,6 +33,26 @@ INIT_SCRIPT = os.path.join(BACKEND_DIR, "init_data.py")
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "frontend")
 
 
+def _matches_alphabet(val: str, alphabet: str) -> bool:
+    if alphabet == "digits":
+        return val.isdigit()
+    if alphabet == "hex":
+        return all(c in "0123456789abcdefABCDEF" for c in val)
+    if alphabet == "upper":
+        return val.isalpha() and val.isupper()
+    if alphabet == "alnum":
+        return val.isalnum()
+    return True  # "any" ou inconnu → permissif
+
+
+def _normalize(val: str, alphabet: str, length: int) -> str:
+    if alphabet == "digits":
+        return val.zfill(length)
+    if alphabet in ("upper", "alnum", "hex"):
+        return val.upper()
+    return val
+
+
 def ensure_data() -> None:
     if os.path.exists(DATA_PATH):
         return
@@ -44,8 +64,14 @@ def ensure_data() -> None:
 
 ensure_data()
 
-GROUPS = CONFIG.get("groups", [[0, 1, 2, 3], [4, 5, 6, 7]])
-NUM_FIELDS = sum(len(g) for g in GROUPS)
+FIELD_SPECS = CONFIG.get("fields")
+if not FIELD_SPECS or not isinstance(FIELD_SPECS, list):
+    raise SystemExit('fields manquant dans config.json — liste de {"answer", "length", "alphabet"}')
+
+NUM_FIELDS = len(FIELD_SPECS)
+GROUPS = CONFIG.get("groups", [list(range(NUM_FIELDS))])
+if sum(len(g) for g in GROUPS) != NUM_FIELDS:
+    raise SystemExit("groups dans config.json ne couvre pas exactement tous les champs.")
 GROUP_OF = {fid: gi for gi, fids in enumerate(GROUPS) for fid in fids}
 LOCK_DURATION = timedelta(minutes=LOCK_TIME_MINUTES)
 PERMANENT_LOCK = "9999-12-31T00:00:00+00:00"
@@ -158,11 +184,13 @@ def api_state():
         {
             "fields": fields,
             "groups": GROUPS,
+            "field_specs": [
+                {"id": i, "length": s.get("length", 2), "alphabet": s.get("alphabet", "digits")}
+                for i, s in enumerate(FIELD_SPECS)
+            ],
+            "layout": CONFIG.get("layout"),
             "all_solved": all(f["solved"] for f in data["fields"]),
             "global_locked_until": iso(global_lock_active()),
-            # Message libre de l'admin. Envoyé même sous verrou : c'est le front
-            # qui le masque pendant le décompte, pour réagir dès la seconde où
-            # le verrou tombe sans attendre le prochain /api/state.
             "message": data.get("message") or None,
         }
     )
@@ -198,9 +226,20 @@ def api_check():
         val = entry.get("value")
         if not isinstance(fid, int) or not 0 <= fid < NUM_FIELDS:
             return jsonify({"error": f"invalid field_id: {fid}"}), 400
-        if not isinstance(val, str) or len(val) not in (1, 2) or not val.isdigit():
+        spec = FIELD_SPECS[fid]
+        flen = int(spec.get("length", 2))
+        alphabet = spec.get("alphabet", "digits")
+        if not isinstance(val, str):
             return jsonify({"error": f"invalid value for field {fid}"}), 400
-        cleaned[fid] = val.zfill(2)
+        if alphabet == "digits":
+            if not val.isdigit() or not (1 <= len(val) <= flen):
+                return jsonify({"error": f"invalid value for field {fid}"}), 400
+        else:
+            val_up = val.upper() if alphabet in ("upper", "alnum", "hex") else val
+            if len(val_up) != flen or not _matches_alphabet(val_up, alphabet):
+                return jsonify({"error": f"invalid value for field {fid}"}), 400
+            val = val_up
+        cleaned[fid] = _normalize(val, alphabet, flen)
 
     with _data_lock:
         data = load_data()

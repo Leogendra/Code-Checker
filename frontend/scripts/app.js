@@ -1,31 +1,24 @@
-const NUM_FIELDS = 8;
-
-// Mise en page GPS : deux blocs de 4 champs séparés par un point.
-// Purement visuel — n'a aucun rapport avec les groupes logiques du serveur.
-const LAYOUT = [[0, 1, 2, 3], [4, 5, 6, 7]];
+// field_specs et layout chargés depuis /api/state au premier appel
+let fieldSpecs = [];  // [{ id, length, alphabet }]
+let layoutData = null;
+let layoutBuilt = false;
 
 // Groupes logiques (règle de révélation), fournis par GET /api/state.
-// Le serveur est seul maître de ce découpage : on ne le devine jamais ici.
-let groups = LAYOUT.flat().map((fid) => [fid]); // repli : chaque champ seul
-let groupOf = Object.fromEntries(groups.map((ids, gi) => ids.map((fid) => [fid, gi])).flat());
+let groups = [];
+let groupOf = {};
 
-const LONG_PRESS_MS = 350; // maintien tactile pour afficher le groupe
+const LONG_PRESS_MS = 350;
 
 // Animations : durées alignées sur les keyframes de style.css
-const FX_STAGGER_MS = 1500; // décalage entre deux groupes (gauche → droite)
+const FX_STAGGER_MS = 1500;
 const FX_SUCCESS_MS = 1800;
 const FX_FAIL_MS = 520;
 
 const state = {
-    fields: Array.from({ length: NUM_FIELDS }, (_, i) => ({
-        id: i,
-        solved: false,
-        locked_until: null, // uniquement les verrous admin
-        value: "",
-    })),
+    fields: [],  // peuplé après le premier loadState
     all_solved: false,
     global_locked_until: null,
-    message: null, // message libre de l'admin
+    message: null,
 };
 
 const els = {
@@ -37,45 +30,76 @@ const els = {
     globalLock: document.getElementById("global-lock"),
 };
 
-function buildLayout() {
+/* ---------- Filtrage par alphabet ---------- */
+
+function filterByAlphabet(val, alphabet) {
+    if (alphabet === "digits") return val.replace(/\D/g, "");
+    if (alphabet === "hex")   return val.replace(/[^0-9a-fA-F]/g, "").toUpperCase();
+    if (alphabet === "upper") return val.replace(/[^a-zA-Z]/g, "").toUpperCase();
+    if (alphabet === "alnum") return val.replace(/[^0-9a-zA-Z]/g, "").toUpperCase();
+    return val; // "any"
+}
+
+function isValidSubmitValue(v, spec) {
+    if (!spec) return /^\d{1,2}$/.test(v);
+    const { length, alphabet } = spec;
+    if (alphabet === "digits") return /^\d+$/.test(v) && v.length >= 1 && v.length <= length;
+    return v.length === length && filterByAlphabet(v, alphabet) === v;
+}
+
+/* ---------- Construction du DOM ---------- */
+
+function createCell(fid, spec) {
+    const len = spec ? spec.length : 2;
+    const alphabet = spec ? spec.alphabet : "digits";
+
+    const cell = document.createElement("div");
+    cell.className = "cell";
+    cell.dataset.field = String(fid);
+    cell.style.setProperty("--field-length", String(len));
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.inputMode = alphabet === "digits" ? "numeric" : "text";
+    input.maxLength = len;
+    input.autocomplete = "off";
+    input.dataset.field = String(fid);
+    input.addEventListener("input", onInput);
+    input.addEventListener("keydown", onKey);
+
+    const fx = document.createElement("span");
+    fx.className = "lock-fx";
+    fx.setAttribute("aria-hidden", "true");
+    fx.innerHTML =
+        '<span class="dial"></span>' +
+        '<span class="ring ring-inner"></span>' +
+        '<span class="ring ring-outer"></span>';
+
+    cell.appendChild(input);
+    cell.appendChild(fx);
+    bindGroupHint(cell);
+    return cell;
+}
+
+function buildLayout(layout, specs) {
     els.coords.innerHTML = "";
-    LAYOUT.forEach((partIds, pi) => {
+    const sep = layout.separator || "";
+
+    layout.parts.forEach((partIds, pi) => {
+        // Séparateur inter-partie
+        if (pi > 0 && sep) {
+            const dotEl = document.createElement("span");
+            dotEl.className = "dot";
+            dotEl.textContent = sep;
+            els.coords.appendChild(dotEl);
+        }
+
         const partEl = document.createElement("div");
         partEl.className = "part";
         partEl.dataset.part = String(pi);
 
-        partIds.forEach((fid, pos) => {
-            if (pos === 1) {
-                const dot = document.createElement("span");
-                dot.className = "dot";
-                dot.textContent = ".";
-                partEl.appendChild(dot);
-            }
-            const cell = document.createElement("div");
-            cell.className = "cell";
-            cell.dataset.field = String(fid);
-
-            const input = document.createElement("input");
-            input.type = "text";
-            input.inputMode = "numeric";
-            input.maxLength = 2;
-            input.autocomplete = "off";
-            input.dataset.field = String(fid);
-            input.addEventListener("input", onInput);
-            input.addEventListener("keydown", onKey);
-
-            const fx = document.createElement("span");
-            fx.className = "lock-fx";
-            fx.setAttribute("aria-hidden", "true");
-            fx.innerHTML =
-                '<span class="dial"></span>' +
-                '<span class="ring ring-inner"></span>' +
-                '<span class="ring ring-outer"></span>';
-
-            cell.appendChild(input);
-            cell.appendChild(fx);
-            bindGroupHint(cell);
-            partEl.appendChild(cell);
+        partIds.forEach((fid) => {
+            partEl.appendChild(createCell(fid, specs[fid]));
         });
 
         els.coords.appendChild(partEl);
@@ -90,21 +114,21 @@ function buildLayout() {
 }
 
 /**
- * Adopte le découpage en groupes envoyé par le serveur et l'inscrit dans le DOM
- * (data-group par cellule). Toute forme invalide retombe sur « chaque champ
- * seul », qui ne promet jamais un regroupement inexistant.
+ * Adopte le découpage en groupes envoyé par le serveur.
  */
 function applyGroups(serverGroups) {
+    const total = fieldSpecs.length;
     const valid =
+        total > 0 &&
         Array.isArray(serverGroups) &&
         serverGroups.length > 0 &&
         serverGroups.every((ids) => Array.isArray(ids) && ids.length > 0 &&
-            ids.every((fid) => Number.isInteger(fid) && fid >= 0 && fid < NUM_FIELDS)) &&
+            ids.every((fid) => Number.isInteger(fid) && fid >= 0 && fid < total)) &&
         serverGroups.flat().slice().sort((a, b) => a - b).join(",") ===
-            Array.from({ length: NUM_FIELDS }, (_, i) => i).join(",");
+            Array.from({ length: total }, (_, i) => i).join(",");
 
     groups = valid ? serverGroups.map((ids) => ids.slice().sort((a, b) => a - b))
-                   : Array.from({ length: NUM_FIELDS }, (_, i) => [i]);
+                   : Array.from({ length: total }, (_, i) => [i]);
     groupOf = {};
     groups.forEach((ids, gi) => ids.forEach((fid) => { groupOf[fid] = gi; }));
 
@@ -114,13 +138,19 @@ function applyGroups(serverGroups) {
     }));
 }
 
+/* ---------- Saisie ---------- */
+
 function onInput(e) {
     const el = e.target;
     hideGroupHint();
-    el.value = el.value.replace(/\D/g, "").slice(0, 2);
-    state.fields[Number(el.dataset.field)].value = el.value;
-    if (el.value.length === 2) {
-        const next = findNextEditable(Number(el.dataset.field));
+    const fid = Number(el.dataset.field);
+    const spec = fieldSpecs[fid];
+    const len = spec ? spec.length : 2;
+    const alphabet = spec ? spec.alphabet : "digits";
+    el.value = filterByAlphabet(el.value, alphabet).slice(0, len);
+    if (state.fields[fid]) state.fields[fid].value = el.value;
+    if (el.value.length === len) {
+        const next = findNextEditable(fid);
         if (next) next.focus();
     }
 }
@@ -136,7 +166,7 @@ function onKey(e) {
 }
 
 function findNextEditable(fromId) {
-    for (let i = fromId + 1; i < NUM_FIELDS; i++) {
+    for (let i = fromId + 1; i < fieldSpecs.length; i++) {
         if (isEditable(i)) return document.querySelector(`input[data-field="${i}"]`);
     }
     return null;
@@ -150,11 +180,11 @@ function findPrevEditable(fromId) {
 }
 
 function isEditable(fid) {
-    return !state.fields[fid].solved && !isAdminLocked(fid) && !isGlobalLocked();
+    return !state.fields[fid]?.solved && !isAdminLocked(fid) && !isGlobalLocked();
 }
 
 function isAdminLocked(fid) {
-    const lu = state.fields[fid].locked_until;
+    const lu = state.fields[fid]?.locked_until;
     if (!lu) return false;
     return new Date(lu).getTime() > Date.now();
 }
@@ -177,10 +207,8 @@ function cellOf(fid) {
 let hintTimer = null;
 let hintedGroup = null;
 
-// Un groupe déjà révélé n'a plus rien à indiquer : le serveur ne renvoie
-// solved=true que lorsque le groupe entier est résolu.
 function isGroupRevealed(gi) {
-    return (groups[gi] || []).every((fid) => state.fields[fid].solved);
+    return (groups[gi] || []).every((fid) => state.fields[fid]?.solved);
 }
 
 function showGroupHint(fid) {
@@ -200,8 +228,6 @@ function showGroupHint(fid) {
             ? `${ids.length} champs seront révélés ensemble`
             : "Ce champ sera révélé seul";
 
-    // Centré sous l'emprise horizontale du groupe (qui peut chevaucher les deux
-    // blocs GPS), puis borné pour ne pas sortir de la zone des champs.
     const wrap = document.querySelector(".coords-wrap").getBoundingClientRect();
     const rects = cells.map((c) => c.getBoundingClientRect());
     const left = Math.min(...rects.map((r) => r.left));
@@ -224,7 +250,6 @@ function hideGroupHint() {
 function bindGroupHint(cell) {
     const fid = Number(cell.dataset.field);
 
-    // Souris : survol immédiat. Tactile / stylet : maintien.
     cell.addEventListener("pointerenter", (e) => {
         if (e.pointerType === "mouse") showGroupHint(fid);
     });
@@ -238,21 +263,19 @@ function bindGroupHint(cell) {
 
     cell.addEventListener("pointerleave", hideGroupHint);
     cell.addEventListener("pointercancel", hideGroupHint);
-    // Au relâchement seulement pour le tactile : sur souris, un clic ne doit pas
-    // faire disparaître l'indicateur alors que le pointeur est toujours dessus.
     cell.addEventListener("pointerup", (e) => {
         if (e.pointerType !== "mouse") hideGroupHint();
     });
-    // Un maintien tactile ne doit pas ouvrir le menu contextuel du navigateur.
     cell.addEventListener("contextmenu", (e) => {
         if (hintedGroup !== null) e.preventDefault();
     });
 }
 
+/* ---------- Animations ---------- */
+
 let fxTimers = [];
 let fxRunningUntil = 0;
 
-// Vrai tant que la séquence d'animation n'est pas terminée.
 function fxBusy() {
     return Date.now() < fxRunningUntil;
 }
@@ -267,17 +290,6 @@ function clearFx() {
     });
 }
 
-/**
- * Traduit la réponse serveur en étapes d'animation : une étape par groupe, les
- * groupes ordonnés de gauche à droite (par leur champ le plus à gauche). Tous
- * les champs d'une étape s'animent en même temps — un groupe est une serrure,
- * elle s'ouvre d'un bloc.
- *
- * Le serveur ne dit "correct" que si le groupe entier est résolu ; sinon on ne
- * sait rien du champ ({pending}) et on n'anime pas. Un verrou global signifie
- * qu'au moins une réponse du lot est fausse, sans dire laquelle : les champs
- * soumis non révélés tremblent donc, ce qui ne divulgue rien.
- */
 function computeFxSteps(data, submittedIds) {
     const results = data.results || {};
     const byGroup = new Map();
@@ -293,8 +305,6 @@ function computeFxSteps(data, submittedIds) {
         byGroup.get(gi).fids.add(fid);
     });
 
-    // Un groupe révélé s'ouvre en entier, y compris les champs non soumis cette
-    // fois-ci (déjà résolus en base mais encore masqués côté client).
     byGroup.forEach((step) => {
         if (step.kind === "success") (groups[step.gi] || []).forEach((fid) => step.fids.add(fid));
     });
@@ -304,7 +314,6 @@ function computeFxSteps(data, submittedIds) {
         .sort((a, b) => a.fids[0] - b.fids[0]);
 }
 
-// Durée totale de la séquence : un décalage par groupe, plus l'animation du dernier.
 function fxTotalMs(steps) {
     if (!steps.length) return 0;
     const last = steps[steps.length - 1];
@@ -312,10 +321,6 @@ function fxTotalMs(steps) {
         (last.kind === "success" ? FX_SUCCESS_MS : FX_FAIL_MS);
 }
 
-// Gèle l'apparence des champs concernés avant le render(), pour que le
-// vert / rouge n'apparaisse qu'au moment de l'animation de leur groupe.
-// Réserve aussi le temps de la séquence dès maintenant : render() est appelé
-// avant runFxSequence, et sans ça le verdict s'afficherait une seconde de trop.
 function markFxPending(steps) {
     clearFx();
     fxRunningUntil = Date.now() + fxTotalMs(steps);
@@ -334,7 +339,7 @@ function runFxSequence(steps) {
             const cells = fids.map(cellOf).filter(Boolean);
             if (!cells.length) return;
             cells.forEach((cell) => {
-                delete cell.dataset.fx; // libère le style final (vert / rouge)
+                delete cell.dataset.fx;
                 cell.classList.add(kind === "success" ? "unlocking" : "shaking");
             });
             const end = setTimeout(() => {
@@ -345,20 +350,21 @@ function runFxSequence(steps) {
         fxTimers.push(start);
     });
 
-    // Rend le verdict visible dès la dernière serrure jouée, sans attendre le
-    // tick de render() (toutes les secondes).
     fxTimers.push(setTimeout(render, Math.max(0, fxRunningUntil - Date.now()) + 80));
 }
 
+/* ---------- Soumission ---------- */
+
 async function submitAll() {
     if (isGlobalLocked()) return;
-    hideGroupHint(); // ne pas superposer le surlignage à la séquence d'animation
+    hideGroupHint();
 
     const payload = [];
     state.fields.forEach((f) => {
         if (f.solved || isAdminLocked(f.id)) return;
         const v = (f.value || "").trim();
-        if (/^\d{1,2}$/.test(v)) payload.push({ field_id: f.id, value: v });
+        const spec = fieldSpecs[f.id];
+        if (isValidSubmitValue(v, spec)) payload.push({ field_id: f.id, value: v });
     });
     if (payload.length === 0) {
         setStatus("Rien à valider : remplis au moins un champ.");
@@ -409,10 +415,8 @@ function applyBatchResult(data) {
     }
 }
 
-/* ---------- Zone #status : messages locaux + message de l'admin ---------- */
+/* ---------- Zone #status ---------- */
 
-// Les deux se partagent la même div. Un message local (copie, erreur réseau…)
-// passe devant, mais expire : sans ça il masquerait le message admin pour de bon.
 const STATUS_TTL_MS = 6000;
 let localStatus = "";
 let localStatusUntil = 0;
@@ -426,28 +430,46 @@ function setStatus(msg) {
 function renderStatus() {
     let msg = "";
     if (localStatus && Date.now() < localStatusUntil) msg = localStatus;
-    // Message admin caché pendant le décompte : on ne parle pas par-dessus le verrou.
     else if (state.message && !isGlobalLocked()) msg = state.message;
 
     els.status.style.display = msg ? "block" : "none";
     els.status.textContent = msg;
 }
 
+/* ---------- Chargement de l'état ---------- */
+
 async function loadState() {
     try {
         const r = await fetch("/api/state");
         const data = await r.json();
+
+        // Premier chargement : initialiser fieldSpecs, state.fields, et construire le DOM
+        if (!layoutBuilt && data.field_specs && data.layout) {
+            fieldSpecs = data.field_specs;
+            state.fields = fieldSpecs.map((s) => ({
+                id: s.id,
+                solved: false,
+                locked_until: null,
+                value: "",
+            }));
+            applyGroups(data.groups);
+            buildLayout(data.layout, fieldSpecs);
+            layoutBuilt = true;
+        } else {
+            applyGroups(data.groups);
+        }
+
         data.fields.forEach((f) => {
             const local = state.fields[f.id];
+            if (!local) return;
             local.solved = f.solved;
             local.locked_until = f.locked_until;
-            // On rejoue la dernière valeur soumise, sans écraser une saisie en cours
-            // (loadState est aussi appelé périodiquement). Le serveur renvoie toujours
-            // 2 chiffres ("02") ; on retire le zéro de tête pour l'affichage.
-            if (f.solved) local.value = stripZeroPad(f.value) || local.value || "";
-            else if (!local.value && f.value) local.value = stripZeroPad(f.value);
+            const spec = fieldSpecs[f.id];
+            const isDigits = !spec || spec.alphabet === "digits";
+            if (f.solved) local.value = isDigits ? (stripZeroPad(f.value) || local.value || "") : (f.value || local.value || "");
+            else if (!local.value && f.value) local.value = isDigits ? stripZeroPad(f.value) : f.value;
         });
-        applyGroups(data.groups);
+
         state.all_solved = data.all_solved;
         state.global_locked_until = data.global_locked_until;
         state.message = data.message || null;
@@ -456,6 +478,8 @@ async function loadState() {
         setStatus("Check ta connexion pelo.");
     }
 }
+
+/* ---------- Rendu ---------- */
 
 function fmtCountdown(ms) {
     if (ms <= 0) return "00:00";
@@ -471,14 +495,15 @@ function fmtCountdown(ms) {
 }
 
 function render() {
+    if (state.fields.length === 0) return; // layout pas encore construit
+
     const gl = isGlobalLocked();
 
-    // Le groupe surligné vient d'être révélé (fin d'animation, ou /api/state) :
-    // on retire l'indicateur sans attendre que le pointeur ressorte.
     if (hintedGroup !== null && isGroupRevealed(hintedGroup)) hideGroupHint();
 
     state.fields.forEach((f) => {
         const cell = document.querySelector(`.cell[data-field="${f.id}"]`);
+        if (!cell) return;
         const input = cell.querySelector("input");
         cell.classList.remove("solved", "locked", "admin-locked");
 
@@ -504,8 +529,6 @@ function render() {
         }
     });
 
-    // Le verdict (chrono de verrouillage / écran de réussite) n'apparaît qu'une
-    // fois tous les champs animés : la serrure raconte d'abord, on conclut après.
     const showVerdict = !fxBusy();
 
     els.globalLock.classList.toggle("visible", gl && showVerdict);
@@ -515,10 +538,8 @@ function render() {
     } else {
         els.globalLock.innerHTML = "";
     }
-    // Verrouillé = pas de nouvelle tentative, même pendant l'animation.
     els.submitBtn.disabled = gl;
 
-    // Réussite : plus rien à valider, la carte finale prend le relais.
     const won = state.all_solved && showVerdict;
     els.submitRow.style.display = won ? "none" : "flex";
     if (won) revealFinal();
@@ -529,15 +550,13 @@ function render() {
 function copyText(txt) {
     if (!txt) return;
     navigator.clipboard.writeText(txt).then(
-        () => setStatus("Coordonnées copiées : " + txt),
+        () => setStatus("Copié : " + txt),
         () => setStatus("Copie impossible."),
     );
 }
 
 /* ---------- Carte finale ---------- */
 
-// idle → loading → done. render() tourne chaque seconde : sans cet état on
-// rappellerait /api/reveal en boucle (et le serveur limite à 10 req/min).
 let finalState = "idle";
 let finalRetryAt = 0;
 
@@ -551,7 +570,7 @@ async function revealFinal() {
         finalState = "done";
     } catch (e) {
         finalState = "idle";
-        finalRetryAt = Date.now() + 5000; // nouvelle tentative, sans marteler l'API
+        finalRetryAt = Date.now() + 5000;
         setStatus("Révélation impossible pour l'instant.");
     }
 }
@@ -560,7 +579,7 @@ function renderFinal(data) {
     els.final.innerHTML = "";
 
     const h = document.createElement("h2");
-    h.textContent = "Bravo";
+    h.textContent = data.title || "Bravo";
     els.final.appendChild(h);
 
     if (data.note) {
@@ -572,20 +591,29 @@ function renderFinal(data) {
     const row = document.createElement("div");
     row.className = "final-actions";
 
-    const copy = document.createElement("button");
-    copy.textContent = "Copier";
-    copy.addEventListener("click", () => copyText(data.coords || ""));
-    row.appendChild(copy);
-
-    if (data.maps_url) {
-        const a = document.createElement("a");
-        a.className = "btn";
-        a.href = data.maps_url;
-        a.target = "_blank";
-        a.rel = "noopener";
-        a.textContent = "Ouvrir dans Maps";
-        row.appendChild(a);
+    if (data.payload) {
+        const copy = document.createElement("button");
+        copy.textContent = "Copier";
+        copy.addEventListener("click", () => copyText(data.payload));
+        row.appendChild(copy);
     }
+
+    (data.actions || []).forEach((action) => {
+        if (action.type === "copy") {
+            const btn = document.createElement("button");
+            btn.textContent = action.label || "Copier";
+            btn.addEventListener("click", () => copyText(action.value || data.payload || ""));
+            row.appendChild(btn);
+        } else if (action.type === "link" && action.href) {
+            const a = document.createElement("a");
+            a.className = "btn";
+            a.href = action.href;
+            a.target = "_blank";
+            a.rel = "noopener";
+            a.textContent = action.label || "Ouvrir";
+            row.appendChild(a);
+        }
+    });
 
     els.final.appendChild(row);
     els.final.classList.add("visible");
@@ -593,7 +621,6 @@ function renderFinal(data) {
 
 els.submitBtn.addEventListener("click", submitAll);
 
-buildLayout();
 loadState();
 setInterval(render, 1000);
 setInterval(loadState, 30000);
