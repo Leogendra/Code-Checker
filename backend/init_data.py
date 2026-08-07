@@ -3,17 +3,23 @@ import json
 import os
 import sys
 
-from dotenv import load_dotenv
-
 BACKEND_DIR = os.path.dirname(__file__)
 ROOT_DIR = os.path.dirname(BACKEND_DIR)
 DATA_PATH = os.path.join(BACKEND_DIR, "data.json")
+CONFIG_PATH = os.path.join(ROOT_DIR, "config.json")
 
-load_dotenv(os.path.join(ROOT_DIR, ".env"))
+if not os.path.exists(CONFIG_PATH):
+    raise SystemExit("config.json introuvable à la racine du projet.")
+with open(CONFIG_PATH, encoding="utf-8") as _f:
+    CONFIG = json.load(_f)
 
-ANSWER = os.environ.get("ANSWER")  # coords with format "lat,lon" (with decimals)
+ANSWER = CONFIG.get("answer")
 if not ANSWER:
-    raise SystemExit("ANSWER manquant : définis-le dans le fichier .env (ex: ANSWER=43.174385,2.993759)")
+    raise SystemExit('answer manquant dans config.json (ex: "answer": "43.174385,2.993759")')
+
+FINAL_NOTE = CONFIG.get("final_note")
+if not FINAL_NOTE:
+    raise SystemExit('final_note manquant dans config.json')
 
 ANSWER_PIECES = []
 for part in ANSWER.split(","):
@@ -28,7 +34,7 @@ for part in ANSWER.split(","):
 FINAL = {
     "coords": ANSWER,
     "maps_url": f"https://www.google.com/maps/?q={ANSWER}",
-    "note": "C'est l'heure de se rendre aux coordonnées...",
+    "note": FINAL_NOTE,
 }
 
 

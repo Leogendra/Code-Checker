@@ -11,15 +11,23 @@ from flask import Flask, jsonify, request, send_from_directory
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
-load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
+_ROOT_DIR = os.path.dirname(__file__)
+
+load_dotenv(os.path.join(_ROOT_DIR, ".env"))
 ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN") or None
 
-try:
-    LOCK_TIME_MINUTES = float(os.environ.get("LOCK_TIME") or 60)
-except ValueError:
-    raise SystemExit("LOCK_TIME invalide dans .env : doit être un nombre de minutes.")
+_CONFIG_PATH = os.path.join(_ROOT_DIR, "config.json")
+if not os.path.exists(_CONFIG_PATH):
+    raise SystemExit("config.json introuvable à la racine du projet.")
+with open(_CONFIG_PATH, encoding="utf-8") as _f:
+    CONFIG = json.load(_f)
 
-BACKEND_DIR = os.path.join(os.path.dirname(__file__), "backend")
+try:
+    LOCK_TIME_MINUTES = float(CONFIG.get("lock_time", 60))
+except (TypeError, ValueError):
+    raise SystemExit("lock_time invalide dans config.json : doit être un nombre de minutes.")
+
+BACKEND_DIR = os.path.join(_ROOT_DIR, "backend")
 DATA_PATH = os.path.join(BACKEND_DIR, "data.json")
 INIT_SCRIPT = os.path.join(BACKEND_DIR, "init_data.py")
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "frontend")
@@ -36,9 +44,8 @@ def ensure_data() -> None:
 
 ensure_data()
 
-NUM_FIELDS = 8
-# GROUPS = [[0, 1, 2, 3], [4, 5, 6, 7]]
-GROUPS = [[0], [1, 2, 3], [4], [5, 6, 7]]
+GROUPS = CONFIG.get("groups", [[0, 1, 2, 3], [4, 5, 6, 7]])
+NUM_FIELDS = sum(len(g) for g in GROUPS)
 GROUP_OF = {fid: gi for gi, fids in enumerate(GROUPS) for fid in fids}
 LOCK_DURATION = timedelta(minutes=LOCK_TIME_MINUTES)
 PERMANENT_LOCK = "9999-12-31T00:00:00+00:00"
