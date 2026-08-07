@@ -83,23 +83,21 @@ function createCell(fid, spec) {
 
 function buildLayout(layout, specs) {
     els.code.innerHTML = "";
-    const sep = layout.separator || "";
 
-    layout.parts.forEach((partIds, pi) => {
-        // Séparateur inter-partie
-        if (pi > 0 && sep) {
-            const dotEl = document.createElement("span");
-            dotEl.className = "dot";
-            dotEl.textContent = sep;
-            els.code.appendChild(dotEl);
-        }
-
+    layout.forEach((partItems, pi) => {
         const partEl = document.createElement("div");
         partEl.className = "part";
         partEl.dataset.part = String(pi);
 
-        partIds.forEach((fid) => {
-            partEl.appendChild(createCell(fid, specs[fid]));
+        partItems.forEach((item) => {
+            if (typeof item === "string") {
+                const dotEl = document.createElement("span");
+                dotEl.className = "dot";
+                dotEl.textContent = item;
+                partEl.appendChild(dotEl);
+            } else {
+                partEl.appendChild(createCell(item, specs[item]));
+            }
         });
 
         els.code.appendChild(partEl);
