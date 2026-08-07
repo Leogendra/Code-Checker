@@ -1,9 +1,9 @@
-# Coords finder
+# Code Checker
 
-Petite énigme auto-hébergée : 8 champs à 2 chiffres forment des coordonnées GPS
-(latitude/longitude). Le serveur ne révèle jamais les réponses ; chaque groupe
-de 4 champs n'est révélé qu'une fois entièrement résolu, et une mauvaise
-réponse déclenche un verrou global (durée configurable, 1h par défaut).
+Petite énigme auto-hébergée : des champs forment un code à trouver.
+Le serveur ne révèle jamais les réponses ; chaque groupe de champs n'est révélé
+qu'une fois entièrement résolu, et une mauvaise réponse déclenche un verrou
+global (durée configurable, 1h par défaut).
 
 ## Architecture
 
@@ -25,24 +25,37 @@ réponse déclenche un verrou global (durée configurable, 1h par défaut).
    pip install -r requirements.txt
    ```
 
-2. Configuration (fichier `.env` à la racine) :
+2. Secrets (fichier `.env` à la racine) :
    ```
    ADMIN_TOKEN=password
-   ANSWER=48.858370,2.294481
-   LOCK_TIME=60
    ```
    - `ADMIN_TOKEN` : mot de passe de la page `/admin`.
-   - `ANSWER` : coordonnées `"lat,lon"` (avec décimales) à découper en 8 réponses.
-   - `LOCK_TIME` : durée du verrou après une mauvaise réponse, en minutes (60 par défaut).
 
-3. Données de la partie : édite `FINAL` (message affiché à la révélation)
-   dans `backend/init_data.py` si besoin, puis génère `backend/data.json` :
+3. Configuration de la partie (fichier `config.json` à la racine) :
+   ```json
+   {
+     "answer": "48.858370,2.294481",
+     "final_note": "C'est l'heure de se rendre aux coordonnées...",
+     "lock_time": 60,
+     "groups": [[0], [1, 2, 3], [4], [5, 6, 7]],
+     "layout": { "parts": [[0, 1, 2, 3], [4, 5, 6, 7]], "separator": "." }
+   }
+   ```
+   - `answer` : la réponse complète, découpée en champs par `init_data.py`.
+   - `final_note` : message affiché à la révélation.
+   - `lock_time` : durée du verrou après une mauvaise réponse, en minutes (60 par défaut).
+   - `groups` : regroupement logique des champs pour la révélation progressive.
+   - `layout` : découpage visuel + séparateur affiché entre les blocs.
+
+   `config.json` est git-ignoré (il contient la réponse).
+
+4. Données de la partie : génère `backend/data.json` :
    ```
    python backend/init_data.py
    ```
    Ce fichier est aussi créé automatiquement au premier démarrage de `app.py`
    s'il n'existe pas encore. Utilise `--reset` pour le régénérer depuis zéro
-   (par exemple après avoir changé `ANSWER`).
+   (par exemple après avoir changé `answer` ou `final_note` dans `config.json`).
 
 4. Lancer le serveur :
    ```

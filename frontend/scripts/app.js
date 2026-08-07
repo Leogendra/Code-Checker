@@ -22,7 +22,7 @@ const state = {
 };
 
 const els = {
-    coords: document.getElementById("coords"),
+    code: document.getElementById("code"),
     status: document.getElementById("status"),
     submitBtn: document.getElementById("submit-btn"),
     submitRow: document.getElementById("submit-row"),
@@ -82,7 +82,7 @@ function createCell(fid, spec) {
 }
 
 function buildLayout(layout, specs) {
-    els.coords.innerHTML = "";
+    els.code.innerHTML = "";
     const sep = layout.separator || "";
 
     layout.parts.forEach((partIds, pi) => {
@@ -91,7 +91,7 @@ function buildLayout(layout, specs) {
             const dotEl = document.createElement("span");
             dotEl.className = "dot";
             dotEl.textContent = sep;
-            els.coords.appendChild(dotEl);
+            els.code.appendChild(dotEl);
         }
 
         const partEl = document.createElement("div");
@@ -102,13 +102,13 @@ function buildLayout(layout, specs) {
             partEl.appendChild(createCell(fid, specs[fid]));
         });
 
-        els.coords.appendChild(partEl);
+        els.code.appendChild(partEl);
     });
 
     els.groupTip = document.createElement("div");
     els.groupTip.className = "group-tip";
     els.groupTip.setAttribute("role", "tooltip");
-    document.querySelector(".coords-wrap").appendChild(els.groupTip);
+    document.querySelector(".code-wrap").appendChild(els.groupTip);
 
     applyGroups(groups);
 }
@@ -228,7 +228,7 @@ function showGroupHint(fid) {
             ? `${ids.length} champs seront révélés ensemble`
             : "Ce champ sera révélé seul";
 
-    const wrap = document.querySelector(".coords-wrap").getBoundingClientRect();
+    const wrap = document.querySelector(".code-wrap").getBoundingClientRect();
     const rects = cells.map((c) => c.getBoundingClientRect());
     const left = Math.min(...rects.map((r) => r.left));
     const right = Math.max(...rects.map((r) => r.right));

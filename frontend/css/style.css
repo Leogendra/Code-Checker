@@ -79,13 +79,13 @@ body {
 
 /* Conteneur d'ancrage : le compteur est posé au-dessus des inputs en absolu,
    donc son apparition ne décale jamais la grille de champs. */
-.coords-wrap {
+.code-wrap {
     position: relative;
     display: flex;
     justify-content: center;
 }
 
-.coords {
+.code {
     display: flex;
     flex-wrap: wrap;
     justify-content: center;
@@ -93,7 +93,7 @@ body {
     gap: 32px;
 }
 
-/* Bloc visuel du format GPS (partie entière + décimales), sans lien avec les
+/* Bloc visuel d'une partie du code, sans lien avec les
    groupes logiques du serveur : ceux-ci sont portés par .cell[data-group]. */
 .part {
     display: flex;
@@ -610,7 +610,7 @@ button:disabled {
 }
 
 @media (max-width: 640px) {
-    .coords {
+    .code {
         flex-direction: column;
         gap: 20px;
     }
