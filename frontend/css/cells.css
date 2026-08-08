@@ -1,0 +1,177 @@
+.cell {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+}
+
+.cell input {
+    position: relative;
+    z-index: 1;
+    width: calc(var(--field-length, 2) * 20px + 16px);
+    min-width: 36px;
+    height: 64px;
+    font-size: 1.6rem;
+    text-align: center;
+    background: var(--glass-bg);
+    color: var(--text);
+    border: 1px solid var(--glass-border);
+    border-radius: 10px;
+    font-family: "SF Mono", "Consolas", monospace;
+    outline: none;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+    /* évite la bulle de sélection iOS sur un maintien long */
+    -webkit-touch-callout: none;
+}
+
+.cell input:focus {
+    border-color: var(--glass-border-strong);
+    background: rgba(255, 255, 255, 0.05);
+    box-shadow: 0 0 0 3px rgba(125, 211, 252, 0.08);
+}
+
+.cell input:disabled,
+.cell input:read-only {
+    opacity: 1;
+}
+
+.cell.solved input {
+    cursor: default;
+    color: var(--ok);
+    -webkit-text-fill-color: var(--ok);
+    border-color: rgba(74, 222, 128, 0.25);
+}
+
+.cell.locked input {
+    color: var(--ko);
+    border-color: rgba(248, 113, 113, 0.25);
+}
+
+.cell.admin-locked input {
+    color: var(--muted);
+    opacity: 0.4;
+}
+
+/* ============================================================
+   Indicateur de groupe (survol souris / maintien tactile)
+   ============================================================ */
+
+/* Un input désactivé n'émet aucun événement pointeur : on laisse passer le
+   pointeur jusqu'à .cell pour que l'indicateur marche aussi sous verrou. */
+.cell input:disabled {
+    pointer-events: none;
+}
+
+/* Anneau dessiné autour du champ, en dehors de sa boîte : aucun conflit avec
+   les bordures d'état (vert / rouge) ni avec les keyframes d'animation. */
+.cell::after {
+    content: "";
+    position: absolute;
+    inset: -6px;
+    border: 2px solid transparent;
+    border-radius: 15px;
+    pointer-events: none;
+    z-index: 2;
+    transition: border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.cell.group-hl::after {
+    border-color: var(--hl);
+    box-shadow: 0 0 0 1px rgba(125, 211, 252, 0.18), 0 0 16px rgba(125, 211, 252, 0.28);
+}
+
+/* Placé au-dessus des champs (JS ajuste `left` pour centrer sur le groupe). */
+.group-tip {
+    position: absolute;
+    bottom: calc(100% + 14px);
+    transform: translateX(-50%);
+    white-space: nowrap;
+    padding: 8px 14px;
+    background: rgba(10, 14, 22, 0.96);
+    border: 1px solid var(--hl-border);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: "SF Mono", "Consolas", monospace;
+    font-size: 0.74rem;
+    letter-spacing: 0.02em;
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.16s ease;
+    z-index: 6;
+}
+
+.group-tip.visible {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* petite flèche pointant vers les champs */
+.group-tip::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 100%;
+    width: 8px;
+    height: 8px;
+    background: rgba(10, 14, 22, 0.96);
+    border-right: 1px solid var(--hl-border);
+    border-bottom: 1px solid var(--hl-border);
+    transform: translate(-50%, -50%) rotate(45deg);
+}
+
+/* ============================================================
+   Calque décoratif de serrure (sprite statique, pas d'animation)
+   ============================================================ */
+
+.lock-fx {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    pointer-events: none;
+    z-index: 0;
+}
+
+.lock-fx > * {
+    position: absolute;
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    border-radius: 50%;
+    opacity: 0;
+}
+
+.lock-fx .dial {
+    background: conic-gradient(from 0deg,
+            rgba(74, 222, 128, 0) 0deg,
+            rgba(74, 222, 128, 0.38) 65deg,
+            rgba(74, 222, 128, 0) 145deg,
+            rgba(74, 222, 128, 0.24) 240deg,
+            rgba(74, 222, 128, 0) 325deg);
+}
+
+.lock-fx .ring {
+    border: 2px solid rgba(74, 222, 128, 0.55);
+}
+
+/* Tant que la séquence n'a pas atteint ce champ, gèle son apparence.
+   (!important pour battre .cell.solved / .cell.locked input) */
+.cell[data-fx="pending"] input {
+    color: var(--text) !important;
+    -webkit-text-fill-color: var(--text) !important;
+    border-color: var(--glass-border) !important;
+    box-shadow: none !important;
+}
+
+.dot {
+    font-family: "Roboto" !important;
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--accent);
+    text-shadow: 0 0 12px rgba(125, 211, 252, 0.6);
+    user-select: none;
+    align-self: flex-end;
+}

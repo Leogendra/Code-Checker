@@ -1,5 +1,5 @@
 // field_specs et layout chargés depuis /api/state au premier appel
-let fieldSpecs = [];  // [{ id, length, alphabet }]
+let fieldSpecs = [];
 let layoutData = null;
 let layoutBuilt = false;
 
@@ -9,7 +9,7 @@ let groupOf = {};
 
 const LONG_PRESS_MS = 350;
 
-// Animations : durées alignées sur les keyframes de style.css
+// Animations : durées alignées sur les keyframes de animations.css
 const FX_STAGGER_MS = 1500;
 const FX_SUCCESS_MS = 1800;
 const FX_FAIL_MS = 520;
@@ -30,7 +30,7 @@ const els = {
     globalLock: document.getElementById("global-lock"),
 };
 
-/* ---------- Filtrage par alphabet ---------- */
+/* ---------- Filtrage / validation ---------- */
 
 function filterByAlphabet(val, alphabet) {
     if (alphabet === "digits") return val.replace(/\D/g, "");
@@ -47,93 +47,37 @@ function isValidSubmitValue(v, spec) {
     return v.length === length && filterByAlphabet(v, alphabet) === v;
 }
 
-/* ---------- Construction du DOM ---------- */
+/* ---------- Helpers ---------- */
 
-function createCell(fid, spec) {
-    const len = spec ? spec.length : 2;
-    const alphabet = spec ? spec.alphabet : "digits";
-
-    const cell = document.createElement("div");
-    cell.className = "cell";
-    cell.dataset.field = String(fid);
-    cell.style.setProperty("--field-length", String(len));
-
-    const input = document.createElement("input");
-    input.type = "text";
-    input.inputMode = alphabet === "digits" ? "numeric" : "text";
-    input.maxLength = len;
-    input.autocomplete = "off";
-    input.dataset.field = String(fid);
-    input.addEventListener("input", onInput);
-    input.addEventListener("keydown", onKey);
-
-    const fx = document.createElement("span");
-    fx.className = "lock-fx";
-    fx.setAttribute("aria-hidden", "true");
-    fx.innerHTML =
-        '<span class="dial"></span>' +
-        '<span class="ring ring-inner"></span>' +
-        '<span class="ring ring-outer"></span>';
-
-    cell.appendChild(input);
-    cell.appendChild(fx);
-    bindGroupHint(cell);
-    return cell;
+function cellOf(fid) {
+    return document.querySelector(`.cell[data-field="${fid}"]`);
 }
 
-function buildLayout(layout, specs) {
-    els.code.innerHTML = "";
-
-    layout.forEach((partItems, pi) => {
-        const partEl = document.createElement("div");
-        partEl.className = "part";
-        partEl.dataset.part = String(pi);
-
-        partItems.forEach((item) => {
-            if (typeof item === "string") {
-                const dotEl = document.createElement("span");
-                dotEl.className = "dot";
-                dotEl.textContent = item;
-                partEl.appendChild(dotEl);
-            } else {
-                partEl.appendChild(createCell(item, specs[item]));
-            }
-        });
-
-        els.code.appendChild(partEl);
-    });
-
-    els.groupTip = document.createElement("div");
-    els.groupTip.className = "group-tip";
-    els.groupTip.setAttribute("role", "tooltip");
-    document.querySelector(".code-wrap").appendChild(els.groupTip);
-
-    applyGroups(groups);
+function isEditable(fid) {
+    return !state.fields[fid]?.solved && !isAdminLocked(fid) && !isGlobalLocked();
 }
 
-/**
- * Adopte le découpage en groupes envoyé par le serveur.
- */
-function applyGroups(serverGroups) {
-    const total = fieldSpecs.length;
-    const valid =
-        total > 0 &&
-        Array.isArray(serverGroups) &&
-        serverGroups.length > 0 &&
-        serverGroups.every((ids) => Array.isArray(ids) && ids.length > 0 &&
-            ids.every((fid) => Number.isInteger(fid) && fid >= 0 && fid < total)) &&
-        serverGroups.flat().slice().sort((a, b) => a - b).join(",") ===
-            Array.from({ length: total }, (_, i) => i).join(",");
+function isAdminLocked(fid) {
+    const lu = state.fields[fid]?.locked_until;
+    if (!lu) return false;
+    return new Date(lu).getTime() > Date.now();
+}
 
-    groups = valid ? serverGroups.map((ids) => ids.slice().sort((a, b) => a - b))
-                   : Array.from({ length: total }, (_, i) => [i]);
-    groupOf = {};
-    groups.forEach((ids, gi) => ids.forEach((fid) => { groupOf[fid] = gi; }));
+function isGlobalLocked() {
+    return !!(state.global_locked_until && new Date(state.global_locked_until).getTime() > Date.now());
+}
 
-    groups.forEach((ids, gi) => ids.forEach((fid) => {
-        const cell = cellOf(fid);
-        if (cell) cell.dataset.group = String(gi);
-    }));
+function stripZeroPad(v) {
+    if (!v) return "";
+    return String(Number(v));
+}
+
+function copyText(txt) {
+    if (!txt) return;
+    navigator.clipboard.writeText(txt).then(
+        () => setStatus("Copié : " + txt),
+        () => setStatus("Copie impossible."),
+    );
 }
 
 /* ---------- Saisie ---------- */
@@ -177,242 +121,6 @@ function findPrevEditable(fromId) {
     return null;
 }
 
-function isEditable(fid) {
-    return !state.fields[fid]?.solved && !isAdminLocked(fid) && !isGlobalLocked();
-}
-
-function isAdminLocked(fid) {
-    const lu = state.fields[fid]?.locked_until;
-    if (!lu) return false;
-    return new Date(lu).getTime() > Date.now();
-}
-
-function isGlobalLocked() {
-    return !!(state.global_locked_until && new Date(state.global_locked_until).getTime() > Date.now());
-}
-
-function stripZeroPad(v) {
-    if (!v) return "";
-    return String(Number(v));
-}
-
-function cellOf(fid) {
-    return document.querySelector(`.cell[data-field="${fid}"]`);
-}
-
-/* ---------- Indicateur de groupe ---------- */
-
-let hintTimer = null;
-let hintedGroup = null;
-
-function isGroupRevealed(gi) {
-    return (groups[gi] || []).every((fid) => state.fields[fid]?.solved);
-}
-
-function showGroupHint(fid) {
-    const gi = groupOf[fid];
-    if (gi === undefined || gi === hintedGroup) return;
-    if (isGroupRevealed(gi)) return;
-    hideGroupHint();
-    hintedGroup = gi;
-
-    const ids = groups[gi];
-    const cells = ids.map(cellOf).filter(Boolean);
-    if (!cells.length) return;
-    cells.forEach((c) => c.classList.add("group-hl"));
-
-    els.groupTip.textContent =
-        ids.length > 1
-            ? `${ids.length} champs seront révélés ensemble`
-            : "Ce champ sera révélé seul";
-
-    const wrap = document.querySelector(".code-wrap").getBoundingClientRect();
-    const rects = cells.map((c) => c.getBoundingClientRect());
-    const left = Math.min(...rects.map((r) => r.left));
-    const right = Math.max(...rects.map((r) => r.right));
-    const center = (left + right) / 2 - wrap.left;
-
-    els.groupTip.classList.add("visible");
-    const half = els.groupTip.offsetWidth / 2;
-    els.groupTip.style.left = `${Math.min(Math.max(center, half), wrap.width - half)}px`;
-}
-
-function hideGroupHint() {
-    if (hintTimer) { clearTimeout(hintTimer); hintTimer = null; }
-    if (hintedGroup === null) return;
-    hintedGroup = null;
-    document.querySelectorAll(".cell.group-hl").forEach((c) => c.classList.remove("group-hl"));
-    els.groupTip.classList.remove("visible");
-}
-
-function bindGroupHint(cell) {
-    const fid = Number(cell.dataset.field);
-
-    cell.addEventListener("pointerenter", (e) => {
-        if (e.pointerType === "mouse") showGroupHint(fid);
-    });
-    cell.addEventListener("pointerdown", (e) => {
-        if (e.pointerType === "mouse") return;
-        hintTimer = setTimeout(() => {
-            hintTimer = null;
-            showGroupHint(fid);
-        }, LONG_PRESS_MS);
-    });
-
-    cell.addEventListener("pointerleave", hideGroupHint);
-    cell.addEventListener("pointercancel", hideGroupHint);
-    cell.addEventListener("pointerup", (e) => {
-        if (e.pointerType !== "mouse") hideGroupHint();
-    });
-    cell.addEventListener("contextmenu", (e) => {
-        if (hintedGroup !== null) e.preventDefault();
-    });
-}
-
-/* ---------- Animations ---------- */
-
-let fxTimers = [];
-let fxRunningUntil = 0;
-
-function fxBusy() {
-    return Date.now() < fxRunningUntil;
-}
-
-function clearFx() {
-    fxTimers.forEach(clearTimeout);
-    fxTimers = [];
-    fxRunningUntil = 0;
-    document.querySelectorAll(".cell").forEach((cell) => {
-        cell.classList.remove("unlocking", "shaking");
-        delete cell.dataset.fx;
-    });
-}
-
-function computeFxSteps(data, submittedIds) {
-    const results = data.results || {};
-    const byGroup = new Map();
-
-    submittedIds.forEach((fid) => {
-        const res = results[fid] ?? results[String(fid)];
-        if (!res || res.skipped) return;
-        const kind = res.correct && !res.pending ? "success" : data.global_locked ? "fail" : null;
-        if (!kind) return;
-        const gi = groupOf[fid];
-        if (gi === undefined) return;
-        if (!byGroup.has(gi)) byGroup.set(gi, { gi, kind, fids: new Set() });
-        byGroup.get(gi).fids.add(fid);
-    });
-
-    byGroup.forEach((step) => {
-        if (step.kind === "success") (groups[step.gi] || []).forEach((fid) => step.fids.add(fid));
-    });
-
-    return [...byGroup.values()]
-        .map((step) => ({ ...step, fids: [...step.fids].sort((a, b) => a - b) }))
-        .sort((a, b) => a.fids[0] - b.fids[0]);
-}
-
-function fxTotalMs(steps) {
-    if (!steps.length) return 0;
-    const last = steps[steps.length - 1];
-    return (steps.length - 1) * FX_STAGGER_MS +
-        (last.kind === "success" ? FX_SUCCESS_MS : FX_FAIL_MS);
-}
-
-function markFxPending(steps) {
-    clearFx();
-    fxRunningUntil = Date.now() + fxTotalMs(steps);
-    steps.forEach(({ fids }) => fids.forEach((fid) => {
-        const cell = cellOf(fid);
-        if (cell) cell.dataset.fx = "pending";
-    }));
-}
-
-function runFxSequence(steps) {
-    if (!steps.length) return;
-    fxRunningUntil = Date.now() + fxTotalMs(steps);
-
-    steps.forEach(({ fids, kind }, i) => {
-        const start = setTimeout(() => {
-            const cells = fids.map(cellOf).filter(Boolean);
-            if (!cells.length) return;
-            cells.forEach((cell) => {
-                delete cell.dataset.fx;
-                cell.classList.add(kind === "success" ? "unlocking" : "shaking");
-            });
-            const end = setTimeout(() => {
-                cells.forEach((cell) => cell.classList.remove("unlocking", "shaking"));
-            }, (kind === "success" ? FX_SUCCESS_MS : FX_FAIL_MS) + 60);
-            fxTimers.push(end);
-        }, i * FX_STAGGER_MS);
-        fxTimers.push(start);
-    });
-
-    fxTimers.push(setTimeout(render, Math.max(0, fxRunningUntil - Date.now()) + 80));
-}
-
-/* ---------- Soumission ---------- */
-
-async function submitAll() {
-    if (isGlobalLocked()) return;
-    hideGroupHint();
-
-    const payload = [];
-    state.fields.forEach((f) => {
-        if (f.solved || isAdminLocked(f.id)) return;
-        const v = (f.value || "").trim();
-        const spec = fieldSpecs[f.id];
-        if (isValidSubmitValue(v, spec)) payload.push({ field_id: f.id, value: v });
-    });
-    if (payload.length === 0) {
-        setStatus("Rien à valider : remplis au moins un champ.");
-        return;
-    }
-
-    els.submitBtn.disabled = true;
-    let steps = [];
-    try {
-        const r = await fetch("/api/check", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ fields: payload }),
-        });
-        const data = await r.json();
-        if (data.error) {
-            setStatus("Erreur : " + data.error);
-            return;
-        }
-        steps = computeFxSteps(data, payload.map((p) => p.field_id));
-        markFxPending(steps);
-        applyBatchResult(data);
-        if (data.all_solved) state.all_solved = true;
-    }
-    catch (err) {
-        setStatus("Erreur réseau.");
-    }
-    finally {
-        render();
-        runFxSequence(steps);
-    }
-}
-
-function applyBatchResult(data) {
-    let pendingCount = 0;
-    Object.entries(data.results || {}).forEach(([fidStr, res]) => {
-        const fid = Number(fidStr);
-        if (res.correct && !res.pending) {
-            state.fields[fid].solved = true;
-            state.fields[fid].locked_until = null;
-        } else if (res.pending) {
-            pendingCount++;
-        }
-    });
-    if (data.global_locked) state.global_locked_until = data.global_retry_at || null;
-    if (pendingCount > 0 && !data.global_locked) {
-        setStatus(`Tentative enregistrée, mais aucun groupe complet : rien à révéler.`);
-    }
-}
-
 /* ---------- Zone #status ---------- */
 
 const STATUS_TTL_MS = 6000;
@@ -432,49 +140,6 @@ function renderStatus() {
 
     els.status.style.display = msg ? "block" : "none";
     els.status.textContent = msg;
-}
-
-/* ---------- Chargement de l'état ---------- */
-
-async function loadState() {
-    try {
-        const r = await fetch("/api/state");
-        const data = await r.json();
-
-        // Premier chargement : initialiser fieldSpecs, state.fields, et construire le DOM
-        if (!layoutBuilt && data.field_specs && data.layout) {
-            fieldSpecs = data.field_specs;
-            state.fields = fieldSpecs.map((s) => ({
-                id: s.id,
-                solved: false,
-                locked_until: null,
-                value: "",
-            }));
-            applyGroups(data.groups);
-            buildLayout(data.layout, fieldSpecs);
-            layoutBuilt = true;
-        } else {
-            applyGroups(data.groups);
-        }
-
-        data.fields.forEach((f) => {
-            const local = state.fields[f.id];
-            if (!local) return;
-            local.solved = f.solved;
-            local.locked_until = f.locked_until;
-            const spec = fieldSpecs[f.id];
-            const isDigits = !spec || spec.alphabet === "digits";
-            if (f.solved) local.value = isDigits ? (stripZeroPad(f.value) || local.value || "") : (f.value || local.value || "");
-            else if (!local.value && f.value) local.value = isDigits ? stripZeroPad(f.value) : f.value;
-        });
-
-        state.all_solved = data.all_solved;
-        state.global_locked_until = data.global_locked_until;
-        state.message = data.message || null;
-        render();
-    } catch (e) {
-        setStatus("Check ta connexion pelo.");
-    }
 }
 
 /* ---------- Rendu ---------- */
@@ -545,77 +210,7 @@ function render() {
     renderStatus();
 }
 
-function copyText(txt) {
-    if (!txt) return;
-    navigator.clipboard.writeText(txt).then(
-        () => setStatus("Copié : " + txt),
-        () => setStatus("Copie impossible."),
-    );
-}
-
-/* ---------- Carte finale ---------- */
-
-let finalState = "idle";
-let finalRetryAt = 0;
-
-async function revealFinal() {
-    if (finalState !== "idle" || Date.now() < finalRetryAt) return;
-    finalState = "loading";
-    try {
-        const r = await fetch("/api/reveal");
-        if (!r.ok) throw new Error("http " + r.status);
-        renderFinal(await r.json());
-        finalState = "done";
-    } catch (e) {
-        finalState = "idle";
-        finalRetryAt = Date.now() + 5000;
-        setStatus("Révélation impossible pour l'instant.");
-    }
-}
-
-function renderFinal(data) {
-    els.final.innerHTML = "";
-
-    const h = document.createElement("h2");
-    h.textContent = data.title || "Bravo";
-    els.final.appendChild(h);
-
-    if (data.note) {
-        const p = document.createElement("p");
-        p.textContent = data.note;
-        els.final.appendChild(p);
-    }
-
-    const row = document.createElement("div");
-    row.className = "final-actions";
-
-    if (data.payload) {
-        const copy = document.createElement("button");
-        copy.textContent = "Copier";
-        copy.addEventListener("click", () => copyText(data.payload));
-        row.appendChild(copy);
-    }
-
-    (data.actions || []).forEach((action) => {
-        if (action.type === "copy") {
-            const btn = document.createElement("button");
-            btn.textContent = action.label || "Copier";
-            btn.addEventListener("click", () => copyText(action.value || data.payload || ""));
-            row.appendChild(btn);
-        } else if (action.type === "link" && action.href) {
-            const a = document.createElement("a");
-            a.className = "btn";
-            a.href = action.href;
-            a.target = "_blank";
-            a.rel = "noopener";
-            a.textContent = action.label || "Ouvrir";
-            row.appendChild(a);
-        }
-    });
-
-    els.final.appendChild(row);
-    els.final.classList.add("visible");
-}
+/* ---------- Init ---------- */
 
 els.submitBtn.addEventListener("click", submitAll);
 
