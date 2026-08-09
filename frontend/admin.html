@@ -5,8 +5,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex, nofollow" />
-    <title data-translation="admin_title">Admin</title>
-    <link rel="icon" type="image/png" href="favicon.png" />
+    <title data-translation="admin_title">Admin panel</title>
+    <link rel="icon" type="image/png" href="assets/favicon.png" />
     <link rel="stylesheet" href="css/base.css" />
     <link rel="stylesheet" href="css/ui.css" />
     <link rel="stylesheet" href="css/admin.css" />
@@ -14,7 +14,7 @@
 
 <body>
     <div class="admin">
-        <h1 data-translation="admin_title">Admin</h1>
+        <h1 data-translation="admin_title">Admin panel</h1>
 
         <div id="login" class="login">
             <input id="pwd" type="password" data-translation-placeholder="password" placeholder="password" autocomplete="off" />
@@ -22,11 +22,11 @@
             <div id="login-msg" class="msg"></div>
         </div>
 
-        <div id="panel" style="display:none; flex-direction:column; gap:24px;">
+        <div id="panel" class="panel">
             <div id="global-card" class="global-card">
                 <div class="global-card-info">
                     <div class="global-card-label" data-translation="global_lock_label">Global lock</div>
-                    <div id="global-status" class="global-card-status">—</div>
+                    <div id="global-status" class="global-card-status"></div>
                 </div>
                 <div class="global-card-actions">
                     <button id="global-lock-btn" data-translation="lock_site">Lock site</button>
@@ -37,7 +37,7 @@
             <div class="duration">
                 <label for="minutes" data-translation="duration">Duration</label>
                 <input id="minutes" type="number" min="0" step="1" placeholder="∞" />
-                <span class="hint" data-translation="minutes_hint">minutes (empty = permanent)</span>
+                <span class="hint" data-translation="minutes_hint">minutes</span>
             </div>
 
             <div class="message-card">

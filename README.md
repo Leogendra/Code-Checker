@@ -2,6 +2,8 @@
 
 Small puzzle checker: a set of fields forms a code that the player has to find. The server never reveals the answers; each group of fields is only revealed once fully solved, and a wrong answer triggers a global lock (configurable duration, 1h by default). It can be used for treasure hunts, escape rooms, or any other puzzle game.
 
+![Screenshot](frontend/assets/screenshot.png)
+
 ## Architecture
 
 - **Backend** in Flask. Answers are stored in `backend/data.json` that never leaves the server and no route sends it back to the client. Rate limiting via Flask-Limiter.
