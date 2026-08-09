@@ -1,5 +1,5 @@
 /* ============================================================
-   Réussite : la serrure cède et s'ouvre
+   Success: the lock gives way and opens
    ============================================================ */
 
 .cell.unlocking input {
@@ -30,7 +30,7 @@
         -webkit-text-fill-color: var(--text);
     }
 
-    /* le pêne cède */
+    /* the bolt gives way */
     46% {
         transform: rotate(4deg) scale(1.035);
         border-color: rgba(74, 222, 128, 0.6);
@@ -38,7 +38,7 @@
         box-shadow: 0 0 18px 2px rgba(74, 222, 128, 0.18);
     }
 
-    /* ouverture franche */
+    /* clean opening */
     64% {
         transform: rotate(6deg) scale(1.075);
         border-color: rgba(74, 222, 128, 0.75);
@@ -58,7 +58,7 @@
         transform: rotate(1deg) scale(0.998);
     }
 
-    /* état final = exactement le style .cell.solved input */
+    /* final state = exactly the .cell.solved input style */
     100% {
         transform: rotate(0deg) scale(1);
         border-color: rgba(74, 222, 128, 0.25);
@@ -95,7 +95,7 @@
     }
 }
 
-/* Les deux cercles s'ouvrent vers l'extérieur, décalés dans le temps */
+/* Both circles expand outward, staggered in time. */
 .cell.unlocking .ring-inner {
     --ring-to: 1.85;
     animation: lock-ring 1000ms cubic-bezier(0.16, 0.84, 0.24, 1) 380ms forwards;
@@ -125,7 +125,7 @@
 }
 
 /* ============================================================
-   Échec : la serrure ne cède pas
+   Failure: the lock refuses to open
    ============================================================ */
 
 .cell.shaking input {
@@ -146,7 +146,7 @@
     68% { transform: translateX(-3px) rotate(-0.7deg); }
     82% { transform: translateX(2px) rotate(0.4deg); }
 
-    /* état final = exactement le style .cell.locked */
+    /* final state = exactly the .cell.locked style */
     100% {
         transform: translateX(0) rotate(0deg);
         border-color: rgba(248, 113, 113, 0.25);

@@ -8,8 +8,8 @@
     --accent: #5e5c6a;
     --ok: #4ade80;
     --ko: #f87171;
-    /* indicateur de groupe : volontairement ni vert ni rouge pour ne pas
-       se confondre avec les états résolu / verrouillé */
+    /* Group indicator: deliberately neither green nor red so it doesn't
+       clash with the solved / locked states. */
     --hl: #7dd3fc;
     --hl-border: rgba(125, 211, 252, 0.4);
 }
@@ -77,8 +77,8 @@ body {
     width: fit-content;
 }
 
-/* Conteneur d'ancrage : le compteur est posé au-dessus des inputs en absolu,
-   donc son apparition ne décale jamais la grille de champs. */
+/* Anchor container: the countdown is absolutely positioned above the inputs
+   so its appearance never shifts the field grid. */
 .code-wrap {
     position: relative;
     display: flex;
@@ -93,8 +93,8 @@ body {
     gap: 32px;
 }
 
-/* Bloc visuel d'une partie du code, sans lien avec les
-   groupes logiques du serveur : ceux-ci sont portés par .cell[data-group]. */
+/* Visual block for one part of the code, unrelated to the server-side logical
+   groups (those live on .cell[data-group]). */
 .part {
     display: flex;
     align-items: center;

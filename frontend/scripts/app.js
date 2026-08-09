@@ -1,21 +1,21 @@
-// field_specs et layout chargés depuis /api/state au premier appel
+// field_specs and layout loaded from /api/state on the first call
 let fieldSpecs = [];
 let layoutData = null;
 let layoutBuilt = false;
 
-// Groupes logiques (règle de révélation), fournis par GET /api/state.
+// Logical groups (reveal rule), provided by GET /api/state.
 let groups = [];
 let groupOf = {};
 
 const LONG_PRESS_MS = 350;
 
-// Animations : durées alignées sur les keyframes de animations.css
+// Animations: durations aligned with the keyframes in animations.css
 const FX_STAGGER_MS = 1500;
 const FX_SUCCESS_MS = 1800;
 const FX_FAIL_MS = 520;
 
 const state = {
-    fields: [],  // peuplé après le premier loadState
+    fields: [],  // populated after the first loadState
     all_solved: false,
     global_locked_until: null,
     message: null,
@@ -30,7 +30,7 @@ const els = {
     globalLock: document.getElementById("global-lock"),
 };
 
-/* ---------- Filtrage / validation ---------- */
+/* ---------- Filtering / validation ---------- */
 
 function filterByAlphabet(val, alphabet) {
     if (alphabet === "digits") return val.replace(/\D/g, "");
@@ -75,12 +75,12 @@ function stripZeroPad(v) {
 function copyText(txt) {
     if (!txt) return;
     navigator.clipboard.writeText(txt).then(
-        () => setStatus("Copié : " + txt),
-        () => setStatus("Copie impossible."),
+        () => setStatus(t("copied", { value: txt })),
+        () => setStatus(t("copy_failed")),
     );
 }
 
-/* ---------- Saisie ---------- */
+/* ---------- Input ---------- */
 
 function onInput(e) {
     const el = e.target;
@@ -121,7 +121,7 @@ function findPrevEditable(fromId) {
     return null;
 }
 
-/* ---------- Zone #status ---------- */
+/* ---------- #status area ---------- */
 
 const STATUS_TTL_MS = 6000;
 let localStatus = "";
@@ -142,7 +142,7 @@ function renderStatus() {
     els.status.textContent = msg;
 }
 
-/* ---------- Rendu ---------- */
+/* ---------- Render ---------- */
 
 function fmtCountdown(ms) {
     if (ms <= 0) return "00:00";
@@ -158,7 +158,7 @@ function fmtCountdown(ms) {
 }
 
 function render() {
-    if (state.fields.length === 0) return; // layout pas encore construit
+    if (state.fields.length === 0) return; // layout not built yet
 
     const gl = isGlobalLocked();
 
@@ -197,7 +197,7 @@ function render() {
     els.globalLock.classList.toggle("visible", gl && showVerdict);
     if (gl && showVerdict) {
         const ms = new Date(state.global_locked_until).getTime() - Date.now();
-        els.globalLock.innerHTML = `<div class="label">Reviens plus tard</div><div class="countdown">${fmtCountdown(ms)}</div>`;
+        els.globalLock.innerHTML = `<div class="label">${t("come_back_later")}</div><div class="countdown">${fmtCountdown(ms)}</div>`;
     } else {
         els.globalLock.innerHTML = "";
     }

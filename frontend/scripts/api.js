@@ -1,4 +1,4 @@
-/* ---------- Soumission ---------- */
+/* ---------- Submission ---------- */
 
 async function submitAll() {
     if (isGlobalLocked()) return;
@@ -12,7 +12,7 @@ async function submitAll() {
         if (isValidSubmitValue(v, spec)) payload.push({ field_id: f.id, value: v });
     });
     if (payload.length === 0) {
-        setStatus("Rien à valider : remplis au moins un champ.");
+        setStatus(t("nothing_to_submit"));
         return;
     }
 
@@ -26,7 +26,7 @@ async function submitAll() {
         });
         const data = await r.json();
         if (data.error) {
-            setStatus("Erreur : " + data.error);
+            setStatus(t("error", { msg: data.error }));
             return;
         }
         steps = computeFxSteps(data, payload.map((p) => p.field_id));
@@ -35,7 +35,7 @@ async function submitAll() {
         if (data.all_solved) state.all_solved = true;
     }
     catch (err) {
-        setStatus("Erreur réseau.");
+        setStatus(t("network_error"));
     }
     finally {
         render();
@@ -56,16 +56,18 @@ function applyBatchResult(data) {
     });
     if (data.global_locked) state.global_locked_until = data.global_retry_at || null;
     if (pendingCount > 0 && !data.global_locked) {
-        setStatus(`Tentative enregistrée, mais aucun groupe complet : rien à révéler.`);
+        setStatus(t("attempt_no_group"));
     }
 }
 
-/* ---------- Chargement de l'état ---------- */
+/* ---------- State loading ---------- */
 
 async function loadState() {
     try {
         const r = await fetch("/api/state");
         const data = await r.json();
+
+        if (data.language) setLanguage(data.language);
 
         if (!layoutBuilt && data.field_specs && data.layout) {
             fieldSpecs = data.field_specs;
@@ -98,11 +100,11 @@ async function loadState() {
         state.message = data.message || null;
         render();
     } catch (e) {
-        setStatus("Check ta connexion pelo.");
+        setStatus(t("connection_check"));
     }
 }
 
-/* ---------- Carte finale ---------- */
+/* ---------- Final card ---------- */
 
 let finalState = "idle";
 let finalRetryAt = 0;
@@ -118,7 +120,7 @@ async function revealFinal() {
     } catch (e) {
         finalState = "idle";
         finalRetryAt = Date.now() + 5000;
-        setStatus("Révélation impossible pour l'instant.");
+        setStatus(t("reveal_unavailable"));
     }
 }
 
@@ -126,7 +128,7 @@ function renderFinal(data) {
     els.final.innerHTML = "";
 
     const h = document.createElement("h2");
-    h.textContent = data.title || "Bravo";
+    h.textContent = data.title || t("final_default_title");
     els.final.appendChild(h);
 
     if (data.note) {
@@ -140,7 +142,7 @@ function renderFinal(data) {
 
     if (data.payload) {
         const copy = document.createElement("button");
-        copy.textContent = "Copier";
+        copy.textContent = t("copy");
         copy.addEventListener("click", () => copyText(data.payload));
         row.appendChild(copy);
     }
@@ -148,7 +150,7 @@ function renderFinal(data) {
     (data.actions || []).forEach((action) => {
         if (action.type === "copy") {
             const btn = document.createElement("button");
-            btn.textContent = action.label || "Copier";
+            btn.textContent = action.label || t("copy");
             btn.addEventListener("click", () => copyText(action.value || data.payload || ""));
             row.appendChild(btn);
         } else if (action.type === "link" && action.href) {
@@ -157,7 +159,7 @@ function renderFinal(data) {
             a.href = action.href;
             a.target = "_blank";
             a.rel = "noopener";
-            a.textContent = action.label || "Ouvrir";
+            a.textContent = action.label || t("open");
             row.appendChild(a);
         }
     });

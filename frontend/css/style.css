@@ -1,4 +1,4 @@
-/* Fichier conservé pour compatibilité. Le CSS est maintenant découpé en : */
+/* File kept for backward compatibility. The CSS is now split into: */
 @import "./base.css";
 @import "./cells.css";
 @import "./animations.css";

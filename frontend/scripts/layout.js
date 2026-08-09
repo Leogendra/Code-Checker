@@ -1,4 +1,4 @@
-/* ---------- Construction du DOM ---------- */
+/* ---------- DOM construction ---------- */
 
 function createCell(fid, spec) {
     const len = spec ? spec.length : 2;
@@ -63,8 +63,8 @@ function buildLayout(layout, specs) {
 }
 
 function applyGroups(serverGroups) {
-    // Le serveur envoie des groupes déjà normalisés (fields = source de vérité,
-    // singletons ajoutés pour les manquants, indices invalides filtrés).
+    // The server sends already-normalized groups (fields = source of truth,
+    // singletons added for missing ones, invalid indices filtered out).
     groups = (serverGroups || []).map((ids) => ids.slice().sort((a, b) => a - b));
     groupOf = {};
     groups.forEach((ids, gi) => ids.forEach((fid) => { groupOf[fid] = gi; }));
@@ -75,7 +75,7 @@ function applyGroups(serverGroups) {
     }));
 }
 
-/* ---------- Indicateur de groupe ---------- */
+/* ---------- Group hint ---------- */
 
 let hintTimer = null;
 let hintedGroup = null;
@@ -88,7 +88,7 @@ function showGroupHint(fid) {
     const gi = groupOf[fid];
     if (gi === undefined || gi === hintedGroup) return;
     const ids = groups[gi] || [];
-    // Un groupe "seul" n'a plus d'indicateur visuel (ni bord, ni tooltip).
+    // A "lone" group no longer shows any visual indicator (no border, no tooltip).
     if (ids.length <= 1) return;
     if (isGroupRevealed(gi)) return;
     hideGroupHint();
@@ -98,7 +98,7 @@ function showGroupHint(fid) {
     if (!cells.length) return;
     cells.forEach((c) => c.classList.add("group-hl"));
 
-    els.groupTip.textContent = `${ids.length} champs seront révélés ensemble`;
+    els.groupTip.textContent = t("group_reveal_together", { count: ids.length });
 
     const wrap = document.querySelector(".code-wrap").getBoundingClientRect();
     const rects = cells.map((c) => c.getBoundingClientRect());

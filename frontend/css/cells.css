@@ -23,7 +23,7 @@
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
-    /* évite la bulle de sélection iOS sur un maintien long */
+    /* Prevent the iOS selection bubble on long press. */
     -webkit-touch-callout: none;
 }
 
@@ -56,17 +56,17 @@
 }
 
 /* ============================================================
-   Indicateur de groupe (survol souris / maintien tactile)
+   Group indicator (mouse hover / touch long-press)
    ============================================================ */
 
-/* Un input désactivé n'émet aucun événement pointeur : on laisse passer le
-   pointeur jusqu'à .cell pour que l'indicateur marche aussi sous verrou. */
+/* A disabled input emits no pointer events: we let the pointer bubble up to
+   .cell so the indicator still works while locked. */
 .cell input:disabled {
     pointer-events: none;
 }
 
-/* Anneau dessiné autour du champ, en dehors de sa boîte : aucun conflit avec
-   les bordures d'état (vert / rouge) ni avec les keyframes d'animation. */
+/* Ring drawn around the field, outside its box: no conflict with state
+   borders (green / red) or with animation keyframes. */
 .cell::after {
     content: "";
     position: absolute;
@@ -83,7 +83,7 @@
     box-shadow: 0 0 0 1px rgba(125, 211, 252, 0.18), 0 0 16px rgba(125, 211, 252, 0.28);
 }
 
-/* Placé au-dessus des champs (JS ajuste `left` pour centrer sur le groupe). */
+/* Placed above the fields (JS adjusts `left` to center on the group). */
 .group-tip {
     position: absolute;
     bottom: calc(100% + 14px);
@@ -109,7 +109,7 @@
     visibility: visible;
 }
 
-/* petite flèche pointant vers les champs */
+/* Small arrow pointing at the fields. */
 .group-tip::after {
     content: "";
     position: absolute;
@@ -124,7 +124,7 @@
 }
 
 /* ============================================================
-   Calque décoratif de serrure (sprite statique, pas d'animation)
+   Decorative lock layer (static sprite, no animation)
    ============================================================ */
 
 .lock-fx {
@@ -157,8 +157,8 @@
     border: 2px solid rgba(74, 222, 128, 0.55);
 }
 
-/* Tant que la séquence n'a pas atteint ce champ, gèle son apparence.
-   (!important pour battre .cell.solved / .cell.locked input) */
+/* Freeze the field's appearance until the sequence reaches it.
+   (!important to beat .cell.solved / .cell.locked input) */
 .cell[data-fx="pending"] input {
     color: var(--text) !important;
     -webkit-text-fill-color: var(--text) !important;

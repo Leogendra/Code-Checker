@@ -18,14 +18,18 @@ ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN") or None
 
 _CONFIG_PATH = os.path.join(_ROOT_DIR, "config.json")
 if not os.path.exists(_CONFIG_PATH):
-    raise SystemExit("config.json introuvable à la racine du projet.")
+    raise SystemExit("config.json not found at the project root.")
 with open(_CONFIG_PATH, encoding="utf-8") as _f:
     CONFIG = json.load(_f)
 
 try:
     LOCK_TIME_MINUTES = float(CONFIG.get("lock_time", 60))
 except (TypeError, ValueError):
-    raise SystemExit("lock_time invalide dans config.json : doit être un nombre de minutes.")
+    raise SystemExit("Invalid lock_time in config.json: must be a number of minutes.")
+
+_SUPPORTED_LANGS = ("en", "fr")
+_raw_lang = CONFIG.get("language", "en")
+LANGUAGE = _raw_lang if _raw_lang in _SUPPORTED_LANGS else "en"
 
 BACKEND_DIR = os.path.join(_ROOT_DIR, "backend")
 DATA_PATH = os.path.join(BACKEND_DIR, "data.json")
@@ -42,7 +46,7 @@ def _matches_alphabet(val: str, alphabet: str) -> bool:
         return val.isalpha() and val.isupper()
     if alphabet == "alnum":
         return val.isalnum()
-    return True  # "any" ou inconnu → permissif
+    return True  # "any" or unknown alphabet: permissive
 
 
 def _normalize(val: str, alphabet: str, length: int) -> str:
@@ -57,8 +61,8 @@ def ensure_data() -> None:
     if os.path.exists(DATA_PATH):
         return
     if not os.path.exists(INIT_SCRIPT):
-        raise SystemExit(f"{INIT_SCRIPT} introuvable, impossible d'initialiser les données.")
-    print(f"{DATA_PATH} absent, running init_data.py...", flush=True)
+        raise SystemExit(f"{INIT_SCRIPT} not found, cannot initialize data.")
+    print(f"{DATA_PATH} missing, running init_data.py...", flush=True)
     subprocess.check_call([sys.executable, INIT_SCRIPT], cwd=BACKEND_DIR)
 
 
@@ -66,13 +70,13 @@ ensure_data()
 
 FIELD_SPECS = CONFIG.get("fields")
 if not FIELD_SPECS or not isinstance(FIELD_SPECS, list):
-    raise SystemExit('fields manquant dans config.json — liste de {"answer", "length", "alphabet"}')
+    raise SystemExit('Missing "fields" in config.json — list of {"answer", "length", "alphabet"}')
 
 NUM_FIELDS = len(FIELD_SPECS)
 
 
 def _normalize_groups(raw, num_fields: int) -> list[list[int]]:
-    """Filtre les indices invalides/dupliqués et ajoute un singleton par field manquant."""
+    """Filter invalid/duplicate indices and add a singleton for every missing field."""
     seen: set[int] = set()
     groups: list[list[int]] = []
     if isinstance(raw, list):
@@ -93,7 +97,7 @@ def _normalize_groups(raw, num_fields: int) -> list[list[int]]:
 
 
 def _normalize_layout(raw, num_fields: int) -> list[list]:
-    """Filtre les indices invalides/dupliqués, garde les séparateurs, appende les fields manquants en une seule part."""
+    """Filter invalid/duplicate indices, keep separators, append missing fields as a single part."""
     seen: set[int] = set()
     parts: list[list] = []
     if isinstance(raw, list):
@@ -132,7 +136,7 @@ _data_lock = threading.Lock()
 
 
 def _load_global_lock() -> datetime | None:
-    """Charge le verrou global depuis data.json au démarrage."""
+    """Load the global lock from data.json at startup."""
     try:
         data = load_data()
         return parse_iso(data.get("global_locked_until"))
@@ -141,7 +145,7 @@ def _load_global_lock() -> datetime | None:
 
 
 def _persist_global_lock(dt: datetime | None) -> None:
-    """Sauvegarde le verrou global dans data.json (survit aux redémarrages)."""
+    """Save the global lock to data.json (so it survives restarts)."""
     with _data_lock:
         data = load_data()
         data["global_locked_until"] = iso(dt)
@@ -179,9 +183,9 @@ def save_data(data: dict) -> None:
 
 def group_revealed(data: dict, fid: int) -> bool:
     """
-    Un champ n'est révélé (vert) que si tout son groupe de 4 est résolu.
-    La persistance est indépendante : elle a lieu à chaque tentative, mais le
-    client n'apprend la correction champ par champ qu'une fois le groupe complet.
+    A field is only revealed (green) once every field in its group is solved.
+    Persistence is independent: it happens on every attempt, but the client
+    only learns the per-field verdict once the whole group is complete.
     """
     return all(data["fields"][x]["solved"] for x in GROUPS[GROUP_OF[fid]])
 
@@ -205,6 +209,13 @@ def admin_page():
     return send_from_directory(STATIC_DIR, "admin.html")
 
 
+@app.get("/api/config")
+@limiter.limit("60 per minute")
+def api_config():
+    """Public config exposed to the frontend (language, etc.)."""
+    return jsonify({"language": LANGUAGE})
+
+
 @app.get("/api/state")
 @limiter.limit("30 per minute")
 def api_state():
@@ -219,12 +230,12 @@ def api_state():
             lu = None
         entry = {
             "id": fid,
-            # masqué tant que le groupe n'est pas complet
+            # hidden until the group is complete
             "solved": bool(f["solved"]) and group_revealed(data, fid),
             "locked_until": iso(lu),
         }
-        # Dernière valeur soumise (rejouée dans le formulaire au rechargement).
-        # Ce n'est pas une fuite : c'est ce que l'utilisateur a lui-même tapé.
+        # Last submitted value (replayed in the form on reload).
+        # Not a leak: it's what the user typed themselves.
         if f.get("value"):
             entry["value"] = f["value"]
         fields.append(entry)
@@ -240,6 +251,7 @@ def api_state():
             "all_solved": all(f["solved"] for f in data["fields"]),
             "global_locked_until": iso(global_lock_active()),
             "message": data.get("message") or None,
+            "language": LANGUAGE,
         }
     )
 
@@ -248,13 +260,13 @@ def api_state():
 @limiter.limit("5 per minute")
 def api_check():
     """
-    Batch. Body : {"fields": [{"field_id": int, "value": "X" | "XX"}, ...]}
-    Une seule erreur dans le batch → verrou global 1h.
-    Champs verrouillés (admin) → ignorés silencieusement.
+    Batch. Body: {"fields": [{"field_id": int, "value": "X" | "XX"}, ...]}
+    A single wrong answer in the batch triggers the 1h global lock.
+    Admin-locked fields are silently ignored.
 
-    Toute tentative évaluée est persistée dans data.json avant de répondre :
-    valeur soumise, statut solved, compteur et date de tentative. La règle de
-    groupe ne conditionne plus l'écriture, seulement ce qui est révélé au client.
+    Every evaluated attempt is persisted to data.json before responding:
+    submitted value, solved status, counter and attempt timestamp. The group
+    rule no longer gates the write, only what is revealed to the client.
     """
     global _global_locked_until
     payload = request.get_json(silent=True) or {}
@@ -305,7 +317,7 @@ def api_check():
                 continue
 
             if f["solved"] and f.get("value") == val:
-                # Rien de nouveau à évaluer, on ne compte pas de tentative.
+                # Nothing new to evaluate: don't count an attempt.
                 evaluated.append(fid)
                 results[fid] = {"correct": True, "already_solved": True}
                 continue
@@ -330,12 +342,12 @@ def api_check():
             response["global_locked"] = True
             response["global_retry_at"] = iso(_global_locked_until)
 
-        # Écriture unique et atomique de tout ce qui vient d'être tenté.
+        # Single atomic write for everything that was just attempted.
         if evaluated:
             save_data(data)
 
-        # Masquage : un champ n'est révélé que si son groupe est intégralement
-        # résolu. Sinon on ne dit ni juste ni faux, seulement "en attente".
+        # Masking: a field is only revealed if its whole group is solved.
+        # Otherwise we don't say correct or wrong, only "pending".
         for fid in evaluated:
             if not group_revealed(data, fid):
                 results[fid] = {"pending": True}
@@ -386,7 +398,7 @@ def _validate_ids(raw) -> list[int] | tuple[dict, int]:
 @limiter.limit("60 per minute")
 @require_admin
 def api_admin_state():
-    """Retourne l'état complet des champs (locked_until brut, sans masquage temporel)."""
+    """Return the full field state (raw locked_until, no time masking)."""
     with _data_lock:
         data = load_data()
     fields = []
@@ -411,6 +423,7 @@ def api_admin_state():
             "all_solved": all(f["solved"] for f in fields),
             "global_locked_until": iso(gl),
             "message": data.get("message") or None,
+            "language": LANGUAGE,
         }
     )
 
@@ -420,9 +433,9 @@ def api_admin_state():
 @require_admin
 def api_admin_message():
     """
-    Message libre affiché sous les champs côté joueur.
-    Body : {"message": str | null}. Vide ou null → message effacé.
-    Le front ne l'affiche pas pendant un verrou global.
+    Free-form message displayed under the fields on the player side.
+    Body: {"message": str | null}. Empty or null clears the message.
+    The frontend hides it while a global lock is active.
     """
     payload = request.get_json(silent=True) or {}
     msg = payload.get("message")
@@ -444,9 +457,9 @@ def api_admin_message():
 @require_admin
 def api_admin_lock():
     """
-    Verrouille manuellement des champs (ex : énigme pas encore révélée).
-    Body : {"field_ids": [int, ...], "minutes": float|null}
-    minutes=null (défaut) → verrou permanent (jusqu'à unlock explicite).
+    Manually lock fields (e.g. a riddle that hasn't been unlocked yet).
+    Body: {"field_ids": [int, ...], "minutes": float|null}
+    minutes=null (default) means a permanent lock (until explicit unlock).
     """
     payload = request.get_json(silent=True) or {}
     ids = _validate_ids(payload.get("field_ids"))
@@ -476,7 +489,7 @@ def api_admin_lock():
 @limiter.limit("30 per minute")
 @require_admin
 def api_admin_unlock():
-    """Retire tout verrou (ne touche pas au statut solved). Body : {"field_ids": [int, ...]}"""
+    """Remove every lock (does not touch the solved status). Body: {"field_ids": [int, ...]}"""
     payload = request.get_json(silent=True) or {}
     ids = _validate_ids(payload.get("field_ids"))
     if isinstance(ids, tuple):
@@ -493,7 +506,7 @@ def api_admin_unlock():
 @limiter.limit("30 per minute")
 @require_admin
 def api_admin_global_lock():
-    """Force le verrou global. Body : {"minutes": float | null}. null → permanent."""
+    """Force the global lock. Body: {"minutes": float | null}. null means permanent."""
     global _global_locked_until
     payload = request.get_json(silent=True) or {}
     minutes = payload.get("minutes")
@@ -515,7 +528,7 @@ def api_admin_global_lock():
 @limiter.limit("30 per minute")
 @require_admin
 def api_admin_global_unlock():
-    """Libère le verrou global."""
+    """Release the global lock."""
     global _global_locked_until
     _global_locked_until = None
     _persist_global_lock(None)
@@ -526,7 +539,7 @@ def api_admin_global_unlock():
 @limiter.limit("10 per minute")
 @require_admin
 def api_admin_reset():
-    """Remet tous les champs à non-résolu, sans valeur, sans verrou. Lève aussi le verrou global."""
+    """Reset every field to unsolved, no value, no lock. Also releases the global lock."""
     global _global_locked_until
     with _data_lock:
         data = load_data()

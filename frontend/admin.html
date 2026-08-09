@@ -1,11 +1,11 @@
 <!doctype html>
-<html lang="fr">
+<html lang="en">
 
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex, nofollow" />
-    <title>Admin</title>
+    <title data-translation="admin_title">Admin</title>
     <link rel="icon" type="image/png" href="favicon.png" />
     <link rel="stylesheet" href="css/base.css" />
     <link rel="stylesheet" href="css/ui.css" />
@@ -14,47 +14,48 @@
 
 <body>
     <div class="admin">
-        <h1>Admin</h1>
+        <h1 data-translation="admin_title">Admin</h1>
 
         <div id="login" class="login">
-            <input id="pwd" type="password" placeholder="mot de passe" autocomplete="off" />
-            <button id="login-btn">Entrer</button>
+            <input id="pwd" type="password" data-translation-placeholder="password" placeholder="password" autocomplete="off" />
+            <button id="login-btn" data-translation="enter">Enter</button>
             <div id="login-msg" class="msg"></div>
         </div>
 
         <div id="panel" style="display:none; flex-direction:column; gap:24px;">
             <div id="global-card" class="global-card">
                 <div class="global-card-info">
-                    <div class="global-card-label">Verrou global</div>
+                    <div class="global-card-label" data-translation="global_lock_label">Global lock</div>
                     <div id="global-status" class="global-card-status">—</div>
                 </div>
                 <div class="global-card-actions">
-                    <button id="global-lock-btn">Verrouiller le site</button>
-                    <button id="global-unlock-btn">Déverrouiller</button>
+                    <button id="global-lock-btn" data-translation="lock_site">Lock site</button>
+                    <button id="global-unlock-btn" data-translation="unlock_site">Unlock</button>
                 </div>
             </div>
 
             <div class="duration">
-                <label for="minutes">Durée</label>
+                <label for="minutes" data-translation="duration">Duration</label>
                 <input id="minutes" type="number" min="0" step="1" placeholder="∞" />
-                <span class="hint">minutes (vide = permanent)</span>
+                <span class="hint" data-translation="minutes_hint">minutes (empty = permanent)</span>
             </div>
 
             <div class="message-card">
-                <label for="msg">Message joueur</label>
+                <label for="msg" data-translation="player_message">Player message</label>
                 <input id="msg" type="text" maxlength="280" autocomplete="off"
-                    placeholder="affiché sous les champs (vide = aucun)" />
+                    data-translation-placeholder="message_placeholder"
+                    placeholder="displayed under fields (empty = none)" />
                 <div class="message-row">
-                    <button id="msg-send">Envoyer</button>
-                    <button id="msg-clear">Effacer</button>
-                    <span class="hint">masqué pendant un verrou global</span>
+                    <button id="msg-send" data-translation="send">Send</button>
+                    <button id="msg-clear" data-translation="clear">Clear</button>
+                    <span class="hint" data-translation="message_hidden_during_lock">hidden during global lock</span>
                 </div>
                 <div id="msg-current" class="message-current"></div>
             </div>
 
             <div class="bulk">
-                <button id="refresh">Rafraîchir</button>
-                <button id="reset-btn">Reset champs</button>
+                <button id="refresh" data-translation="refresh">Refresh</button>
+                <button id="reset-btn" data-translation="reset_fields">Reset fields</button>
             </div>
 
             <div id="rows" class="rows"></div>
@@ -62,6 +63,7 @@
         </div>
     </div>
 
+    <script src="scripts/translations.js"></script>
     <script src="scripts/admin.js"></script>
 </body>
 

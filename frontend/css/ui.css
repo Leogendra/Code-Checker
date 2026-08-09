@@ -5,7 +5,7 @@
     flex-wrap: wrap;
 }
 
-/* .btn : un lien qui doit avoir exactement l'allure d'un bouton */
+/* .btn: a link that must look exactly like a button. */
 button,
 .btn {
     background: var(--glass-bg);
@@ -97,7 +97,7 @@ button:disabled {
     font-size: 0.78rem;
 }
 
-/* liens hors boutons (aucun aujourd'hui, mais la carte peut en contenir) */
+/* Non-button links (none today, but the card can hold some). */
 .final a:not(.btn) {
     color: var(--accent);
     text-decoration: none;
