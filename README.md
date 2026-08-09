@@ -1,83 +1,74 @@
 # Code Checker
 
-Petite énigme auto-hébergée : des champs forment un code à trouver.
-Le serveur ne révèle jamais les réponses ; chaque groupe de champs n'est révélé
-qu'une fois entièrement résolu, et une mauvaise réponse déclenche un verrou
-global (durée configurable, 1h par défaut).
+Small puzzle checker: a set of fields forms a code that the player has to find. The server never reveals the answers; each group of fields is only revealed once fully solved, and a wrong answer triggers a global lock (configurable duration, 1h by default). It can be used for treasure hunts, escape rooms, or any other puzzle game.
 
 ## Architecture
 
-- **Backend** : Flask (`app.py`). Réponses stockées en clair dans
-  `backend/data.json` (git-ignoré) — ce fichier ne quitte jamais le serveur et
-  aucune route ne le renvoie au client. Rate limiting via Flask-Limiter.
-- **Frontend** : HTML/CSS/JS vanilla dans `frontend/`, servi directement par
-  Flask (pas de build).
-- **Admin** : page `/admin`, protégée par un jeton (`ADMIN_TOKEN`), pour
-  verrouiller/déverrouiller des champs, forcer ou lever le verrou global, et
-  réinitialiser la partie.
+- **Backend** in Flask. Answers are stored in `backend/data.json` that never leaves the server and no route sends it back to the client. Rate limiting via Flask-Limiter.
+- **Frontend** in vanilla HTML/CSS/JS, served directly by Flask.
+- **Admin**: `/admin` page, protected by a password, used to lock/unlock fields, force or release the global lock, and reset the game.
+- **Language**: fr / en, driven by the `language` key in `config.json` (default `en`). UI strings live in `frontend/scripts/translations.js`; content strings (like `final_note`) can be provided as per-language dicts in `config.json`.
 
 ## Installation
 
-1. Environnement virtuel :
-   ```
-   python -m venv venv
-   source venv/bin/activate
-   pip install -r requirements.txt
-   ```
+1. Install dependencies:
+```
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
 
-2. Secrets (fichier `.env` à la racine) :
-   ```
-   ADMIN_TOKEN=password
-   ```
-   - `ADMIN_TOKEN` : mot de passe de la page `/admin`.
+2. Create a `.env` file at the project root and add the password for the `/admin` page.
+```
+ADMIN_TOKEN=password
+```
 
-3. Configuration de la partie (fichier `config.json` à la racine) :
-   ```json
-   {
-     "answer": "48.858370,2.294481",
-     "final_note": "C'est l'heure de se rendre aux coordonnées...",
-     "lock_time": 60,
-     "groups": [[0], [1, 2, 3], [4], [5, 6, 7]],
-     "layout": { "parts": [[0, 1, 2, 3], [4, 5, 6, 7]], "separator": "." }
-   }
-   ```
-   - `answer` : la réponse complète, découpée en champs par `init_data.py`.
-   - `final_note` : message affiché à la révélation.
-   - `lock_time` : durée du verrou après une mauvaise réponse, en minutes (60 par défaut).
-   - `groups` : regroupement logique des champs pour la révélation progressive.
-   - `layout` : découpage visuel + séparateur affiché entre les blocs.
+3. Game configuration (`config.json` file at the project root):
+```json
+{
+    "language": "en",
+    "fields": [
+        { "answer": "48", "length": 2, "type": "digits" },
+        { "answer": "85", "length": 2, "type": "digits" }
+    ],
+    "final_note": "Time to head to the coordinates...",
+    "final_payload": "48.858370,2.294481",
+    "lock_time": 60,
+    "groups": [[0], [1]],
+    "layout": [[0, ".", 1]]
+}
+```
+  - `language`: UI language, `"en"` or `"fr"` (default `en`).
+  - `fields`: per-field spec;
+    - `answer`: the correct answer (case-sensitive).
+    - `length`: number of characters in the answer (used to size the input box).
+    - `type`: 
+      * `"digits"`: 0-9  
+      * `"letters"`: A-Z, a-z  
+      * `"hex"`: 0-9, A-F, case-insensitive  
+      * `"upper"`: forces uppercase  
+      * `"lower"`: forces lowercase  
+      * anything else for free-form input  
+  - `final_note`: message shown on reveal.
+  - `final_payload`: raw value exposed by the reveal (e.g. GPS coordinates).
+  - `lock_time`: lock duration after a wrong answer, in minutes (60 by default).
+  - `groups`: logical grouping for progressive reveal.
+  - `layout`: visual layout, including separators as string items.
 
-   `config.json` est git-ignoré (il contient la réponse).
+1. Game data: generate `backend/data.json`:  
+  This file is created automatically the first time `app.py` starts if it doesn't exist yet. Use `--reset` to regenerate it from scratch (for example after changing `fields` or `final_note` in `config.json`).
+```
+python backend/init_data.py --reset
+```
 
-4. Données de la partie : génère `backend/data.json` :
-   ```
-   python backend/init_data.py
-   ```
-   Ce fichier est aussi créé automatiquement au premier démarrage de `app.py`
-   s'il n'existe pas encore. Utilise `--reset` pour le régénérer depuis zéro
-   (par exemple après avoir changé `answer` ou `final_note` dans `config.json`).
+2. Start the server:
+```
+python app.py
+```
+→ http://127.0.0.1:5000 (admin page: http://127.0.0.1:5000/admin)
 
-4. Lancer le serveur :
-   ```
-   python app.py
-   ```
-   → http://127.0.0.1:5000 (page admin : http://127.0.0.1:5000/admin)
+## Security
 
-## API
-
-- `GET /api/state` : état des 8 champs (solved/locked/value), sans jamais
-  exposer la réponse attendue.
-- `POST /api/check` : soumet un lot de réponses. Persiste chaque tentative
-  (valeur, compteur, date) ; ne révèle `correct`/`incorrect` que si le groupe
-  de 4 concerné est intégralement résolu. Une erreur pose un verrou global
-  (`LOCK_TIME` minutes).
-- `GET /api/reveal` : renvoie le message final, uniquement si les 8 champs
-  sont résolus (403 sinon).
-- `GET/POST /api/admin/*` : verrouillage manuel, verrou global, reset —
-  protégés par `ADMIN_TOKEN` (header `X-Admin-Token` ou `?token=`).
-
-## Sécurité
-
-- Les réponses (`answer`) sont en clair dans `backend/data.json`, mais ce fichier reste côté serveur, est git-ignoré, et n'est jamais renvoyé par l'API (y compris les routes admin).
-- Le verrou d'anti-bruteforce est posé par tentative incorrecte, pas par IP : usage mono-utilisateur, pas de session ni de cookie nécessaire.
-- Rate limiting HTTP en plus (Flask-Limiter) pour éviter le spam de requêtes.
+- Answers are stored as plain text in `backend/data.json`, but this file stays server-side.
+- The anti-bruteforce lock is applied per wrong attempt, not per IP: single-user usage, no session or cookie required.
+- HTTP rate limiting on top (Flask-Limiter) to prevent request spam.
