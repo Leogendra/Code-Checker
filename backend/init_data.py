@@ -15,7 +15,7 @@ with open(CONFIG_PATH, encoding="utf-8") as _f:
 
 FIELD_SPECS = CONFIG.get("fields")
 if not FIELD_SPECS or not isinstance(FIELD_SPECS, list):
-    raise SystemExit('Missing "fields" in config.json — list of {"answer", "length", "type"}')
+    raise SystemExit('Missing "fields" in config.json: list of {"answer", "length", "type"}')
 
 FINAL = {
     "note": CONFIG.get("final_note", ""),

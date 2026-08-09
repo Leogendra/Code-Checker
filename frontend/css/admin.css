@@ -47,6 +47,12 @@
     box-shadow: 0 0 0 3px rgba(125, 211, 252, 0.08);
 }
 
+.panel {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
 .rows {
     display: flex;
     flex-direction: column;
