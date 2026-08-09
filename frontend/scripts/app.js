@@ -32,19 +32,20 @@ const els = {
 
 /* ---------- Filtering / validation ---------- */
 
-function filterByAlphabet(val, alphabet) {
-    if (alphabet === "digits") return val.replace(/\D/g, "");
-    if (alphabet === "hex")   return val.replace(/[^0-9a-fA-F]/g, "").toUpperCase();
-    if (alphabet === "upper") return val.replace(/[^a-zA-Z]/g, "").toUpperCase();
-    if (alphabet === "alnum") return val.replace(/[^0-9a-zA-Z]/g, "").toUpperCase();
-    return val; // "any"
+function filterByType(val, type) {
+    if (type === "digits")  return val.replace(/\D/g, "");
+    if (type === "letters") return val.replace(/[^a-zA-Z]/g, "");
+    if (type === "hex")     return val.replace(/[^0-9a-fA-F]/g, "").toUpperCase();
+    if (type === "upper")   return val.toUpperCase();
+    if (type === "lower")   return val.toLowerCase();
+    return val; // free-form
 }
 
 function isValidSubmitValue(v, spec) {
     if (!spec) return /^\d{1,2}$/.test(v);
-    const { length, alphabet } = spec;
-    if (alphabet === "digits") return /^\d+$/.test(v) && v.length >= 1 && v.length <= length;
-    return v.length === length && filterByAlphabet(v, alphabet) === v;
+    const { length, type } = spec;
+    if (type === "digits") return /^\d+$/.test(v) && v.length >= 1 && v.length <= length;
+    return v.length === length && filterByType(v, type) === v;
 }
 
 /* ---------- Helpers ---------- */
@@ -88,8 +89,8 @@ function onInput(e) {
     const fid = Number(el.dataset.field);
     const spec = fieldSpecs[fid];
     const len = spec ? spec.length : 2;
-    const alphabet = spec ? spec.alphabet : "digits";
-    el.value = filterByAlphabet(el.value, alphabet).slice(0, len);
+    const type = spec ? spec.type : "digits";
+    el.value = filterByType(el.value, type).slice(0, len);
     if (state.fields[fid]) state.fields[fid].value = el.value;
     if (el.value.length === len) {
         const next = findNextEditable(fid);

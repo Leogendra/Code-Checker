@@ -15,7 +15,7 @@ with open(CONFIG_PATH, encoding="utf-8") as _f:
 
 FIELD_SPECS = CONFIG.get("fields")
 if not FIELD_SPECS or not isinstance(FIELD_SPECS, list):
-    raise SystemExit('Missing "fields" in config.json — list of {"answer", "length", "alphabet"}')
+    raise SystemExit('Missing "fields" in config.json — list of {"answer", "length", "type"}')
 
 FINAL = {
     "note": CONFIG.get("final_note", ""),
@@ -23,11 +23,13 @@ FINAL = {
 }
 
 
-def _normalize(answer: str, alphabet: str, length: int) -> str:
-    if alphabet == "digits":
+def _normalize(answer: str, type_: str, length: int) -> str:
+    if type_ == "digits":
         return answer.zfill(length)
-    if alphabet in ("upper", "alnum", "hex"):
+    if type_ in ("hex", "upper"):
         return answer.upper()
+    if type_ == "lower":
+        return answer.lower()
     return answer
 
 
@@ -36,13 +38,13 @@ def build_data() -> dict:
     for idx, spec in enumerate(FIELD_SPECS):
         answer = spec.get("answer")
         length = int(spec.get("length", 2))
-        alphabet = spec.get("alphabet", "digits")
+        type_ = spec.get("type", "digits")
         if not answer or not isinstance(answer, str):
             raise ValueError(f"fields[{idx}].answer missing or invalid")
         fields.append({
-            "answer": _normalize(answer, alphabet, length),
+            "answer": _normalize(answer, type_, length),
             "length": length,
-            "alphabet": alphabet,
+            "type": type_,
             "solved": False,
             "locked_until": None,
             "value": None,

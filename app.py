@@ -37,23 +37,23 @@ INIT_SCRIPT = os.path.join(BACKEND_DIR, "init_data.py")
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "frontend")
 
 
-def _matches_alphabet(val: str, alphabet: str) -> bool:
-    if alphabet == "digits":
+def _matches_type(val: str, input_type: str) -> bool:
+    if input_type == "digits":
         return val.isdigit()
-    if alphabet == "hex":
+    if input_type == "letters":
+        return val.isalpha()
+    if input_type == "hex":
         return all(c in "0123456789abcdefABCDEF" for c in val)
-    if alphabet == "upper":
-        return val.isalpha() and val.isupper()
-    if alphabet == "alnum":
-        return val.isalnum()
-    return True  # "any" or unknown alphabet: permissive
+    return True  # "upper", "lower", or anything else: free-form
 
 
-def _normalize(val: str, alphabet: str, length: int) -> str:
-    if alphabet == "digits":
+def _normalize(val: str, input_type: str, length: int) -> str:
+    if input_type == "digits":
         return val.zfill(length)
-    if alphabet in ("upper", "alnum", "hex"):
+    if input_type in ("hex", "upper"):
         return val.upper()
+    if input_type == "lower":
+        return val.lower()
     return val
 
 
@@ -70,7 +70,7 @@ ensure_data()
 
 FIELD_SPECS = CONFIG.get("fields")
 if not FIELD_SPECS or not isinstance(FIELD_SPECS, list):
-    raise SystemExit('Missing "fields" in config.json — list of {"answer", "length", "alphabet"}')
+    raise SystemExit('Missing "fields" in config.json — list of {"answer", "length", "type"}')
 
 NUM_FIELDS = len(FIELD_SPECS)
 
@@ -244,7 +244,7 @@ def api_state():
             "fields": fields,
             "groups": GROUPS,
             "field_specs": [
-                {"id": i, "length": s.get("length", 2), "alphabet": s.get("alphabet", "digits")}
+                {"id": i, "length": s.get("length", 2), "type": s.get("type", "digits")}
                 for i, s in enumerate(FIELD_SPECS)
             ],
             "layout": LAYOUT,
@@ -288,18 +288,18 @@ def api_check():
             return jsonify({"error": f"invalid field_id: {fid}"}), 400
         spec = FIELD_SPECS[fid]
         flen = int(spec.get("length", 2))
-        alphabet = spec.get("alphabet", "digits")
+        input_type = spec.get("type", "digits")
         if not isinstance(val, str):
             return jsonify({"error": f"invalid value for field {fid}"}), 400
-        if alphabet == "digits":
+        if input_type == "digits":
             if not val.isdigit() or not (1 <= len(val) <= flen):
                 return jsonify({"error": f"invalid value for field {fid}"}), 400
         else:
-            val_up = val.upper() if alphabet in ("upper", "alnum", "hex") else val
-            if len(val_up) != flen or not _matches_alphabet(val_up, alphabet):
+            val_up = val.upper() if input_type == "hex" else val
+            if len(val_up) != flen or not _matches_type(val_up, input_type):
                 return jsonify({"error": f"invalid value for field {fid}"}), 400
             val = val_up
-        cleaned[fid] = _normalize(val, alphabet, flen)
+        cleaned[fid] = _normalize(val, input_type, flen)
 
     with _data_lock:
         data = load_data()

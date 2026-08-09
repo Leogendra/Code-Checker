@@ -2,7 +2,7 @@
 
 function createCell(fid, spec) {
     const len = spec ? spec.length : 2;
-    const alphabet = spec ? spec.alphabet : "digits";
+    const type = spec ? spec.type : "digits";
 
     const cell = document.createElement("div");
     cell.className = "cell";
@@ -11,7 +11,7 @@ function createCell(fid, spec) {
 
     const input = document.createElement("input");
     input.type = "text";
-    input.inputMode = alphabet === "digits" ? "numeric" : "text";
+    input.inputMode = type === "digits" ? "numeric" : "text";
     input.maxLength = len;
     input.autocomplete = "off";
     input.dataset.field = String(fid);

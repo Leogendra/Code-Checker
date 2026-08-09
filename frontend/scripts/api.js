@@ -90,7 +90,7 @@ async function loadState() {
             local.solved = f.solved;
             local.locked_until = f.locked_until;
             const spec = fieldSpecs[f.id];
-            const isDigits = !spec || spec.alphabet === "digits";
+            const isDigits = !spec || spec.type === "digits";
             if (f.solved) local.value = isDigits ? (stripZeroPad(f.value) || local.value || "") : (f.value || local.value || "");
             else if (!local.value && f.value) local.value = isDigits ? stripZeroPad(f.value) : f.value;
         });
