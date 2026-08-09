@@ -1,32 +1,38 @@
 <!doctype html>
-<html lang="fr">
+<html lang="en">
 
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Code Checker</title>
+    <title data-translation="app_title">Code Checker</title>
     <link rel="icon" type="image/png" href="favicon.png" />
-    <link rel="stylesheet" href="css/style.css" />
+    <link rel="stylesheet" href="css/base.css" />
+    <link rel="stylesheet" href="css/cells.css" />
+    <link rel="stylesheet" href="css/animations.css" />
+    <link rel="stylesheet" href="css/ui.css" />
 </head>
 
 <body>
     <div class="board">
-        <div class="coords-wrap">
+        <div class="code-wrap">
             <div id="global-lock" class="global-lock"></div>
-            <div class="coords" id="coords"></div>
+            <div class="code" id="code"></div>
         </div>
 
         <div id="status"></div>
 
         <div class="submit-row" id="submit-row">
-            <button id="submit-btn">Valider</button>
-            <!-- <button id="clear-btn" class="secondary">Effacer</button> -->
+            <button id="submit-btn" data-translation="submit">Validate</button>
         </div>
 
-        <!-- Carte finale : affichée d'office à la réussite, elle porte ses propres actions -->
+        <!-- Final card: shown automatically on success, it carries its own actions -->
         <div id="final" class="final"></div>
     </div>
 
+    <script src="scripts/translations.js"></script>
+    <script src="scripts/layout.js"></script>
+    <script src="scripts/fx.js"></script>
+    <script src="scripts/api.js"></script>
     <script src="scripts/app.js"></script>
 </body>
 

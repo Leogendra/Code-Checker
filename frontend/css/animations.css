@@ -1,0 +1,165 @@
+/* ============================================================
+   Success: the lock gives way and opens
+   ============================================================ */
+
+.cell.unlocking input {
+    animation: lock-open 1800ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes lock-open {
+    0% {
+        transform: rotate(0deg) scale(1);
+        border-color: var(--glass-border);
+        background: var(--glass-bg);
+        color: var(--text);
+        -webkit-text-fill-color: var(--text);
+        box-shadow: 0 0 0 0 rgba(74, 222, 128, 0);
+    }
+
+    14% {
+        transform: rotate(-6deg) scale(0.955);
+        border-color: var(--glass-border-strong);
+        color: var(--text);
+        -webkit-text-fill-color: var(--text);
+    }
+
+    28% {
+        transform: rotate(-8.5deg) scale(0.945);
+        border-color: var(--glass-border-strong);
+        color: var(--text);
+        -webkit-text-fill-color: var(--text);
+    }
+
+    /* the bolt gives way */
+    46% {
+        transform: rotate(4deg) scale(1.035);
+        border-color: rgba(74, 222, 128, 0.6);
+        background: rgba(74, 222, 128, 0.07);
+        box-shadow: 0 0 18px 2px rgba(74, 222, 128, 0.18);
+    }
+
+    /* clean opening */
+    64% {
+        transform: rotate(6deg) scale(1.075);
+        border-color: rgba(74, 222, 128, 0.75);
+        background: rgba(74, 222, 128, 0.09);
+        color: var(--ok);
+        -webkit-text-fill-color: var(--ok);
+        box-shadow: 0 0 26px 4px rgba(74, 222, 128, 0.22);
+    }
+
+    80% {
+        transform: rotate(-2.5deg) scale(1.015);
+        color: var(--ok);
+        -webkit-text-fill-color: var(--ok);
+    }
+
+    92% {
+        transform: rotate(1deg) scale(0.998);
+    }
+
+    /* final state = exactly the .cell.solved input style */
+    100% {
+        transform: rotate(0deg) scale(1);
+        border-color: rgba(74, 222, 128, 0.25);
+        background: var(--glass-bg);
+        color: var(--ok);
+        -webkit-text-fill-color: var(--ok);
+        box-shadow: 0 0 0 0 rgba(74, 222, 128, 0);
+    }
+}
+
+.cell.unlocking .dial {
+    animation: lock-dial 1800ms cubic-bezier(0.33, 0, 0.2, 1) forwards;
+}
+
+@keyframes lock-dial {
+    0% {
+        opacity: 0;
+        transform: rotate(0deg) scale(0.55);
+    }
+
+    22% {
+        opacity: 0.85;
+        transform: rotate(-28deg) scale(0.78);
+    }
+
+    64% {
+        opacity: 0.7;
+        transform: rotate(155deg) scale(1.08);
+    }
+
+    100% {
+        opacity: 0;
+        transform: rotate(220deg) scale(1.4);
+    }
+}
+
+/* Both circles expand outward, staggered in time. */
+.cell.unlocking .ring-inner {
+    --ring-to: 1.85;
+    animation: lock-ring 1000ms cubic-bezier(0.16, 0.84, 0.24, 1) 380ms forwards;
+}
+
+.cell.unlocking .ring-outer {
+    --ring-to: 2.7;
+    animation: lock-ring 1150ms cubic-bezier(0.16, 0.84, 0.24, 1) 560ms forwards;
+}
+
+@keyframes lock-ring {
+    0% {
+        opacity: 0;
+        transform: scale(0.35);
+        border-width: 3px;
+    }
+
+    28% {
+        opacity: 0.8;
+    }
+
+    100% {
+        opacity: 0;
+        transform: scale(var(--ring-to, 2.2));
+        border-width: 1px;
+    }
+}
+
+/* ============================================================
+   Failure: the lock refuses to open
+   ============================================================ */
+
+.cell.shaking input {
+    animation: lock-shake 520ms cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
+@keyframes lock-shake {
+    0% {
+        transform: translateX(0) rotate(0deg);
+        border-color: rgba(248, 113, 113, 0.7);
+        box-shadow: 0 0 16px 1px rgba(248, 113, 113, 0.18);
+    }
+
+    12% { transform: translateX(-6px) rotate(-2deg); }
+    26% { transform: translateX(5px) rotate(1.6deg); }
+    40% { transform: translateX(-5px) rotate(-1.4deg); }
+    54% { transform: translateX(4px) rotate(1.1deg); }
+    68% { transform: translateX(-3px) rotate(-0.7deg); }
+    82% { transform: translateX(2px) rotate(0.4deg); }
+
+    /* final state = exactly the .cell.locked style */
+    100% {
+        transform: translateX(0) rotate(0deg);
+        border-color: rgba(248, 113, 113, 0.25);
+        box-shadow: 0 0 0 0 rgba(248, 113, 113, 0);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .cell.unlocking input,
+    .cell.shaking input,
+    .cell.unlocking .dial,
+    .cell.unlocking .ring {
+        animation-duration: 1ms;
+        animation-delay: 0ms;
+    }
+}

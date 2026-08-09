@@ -1,0 +1,154 @@
+.submit-row {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+/* .btn: a link that must look exactly like a button. */
+button,
+.btn {
+    background: var(--glass-bg);
+    color: var(--text);
+    border: 1px solid var(--glass-border);
+    border-radius: 10px;
+    padding: 12px 28px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    font-family: inherit;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: pointer;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+}
+
+.btn {
+    display: inline-block;
+    text-decoration: none;
+    line-height: 1;
+}
+
+button:hover:not(:disabled),
+.btn:hover {
+    border-color: var(--glass-border-strong);
+    background: rgba(255, 255, 255, 0.05);
+    box-shadow: 0 0 0 3px rgba(125, 211, 252, 0.08);
+}
+
+button:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+.submit-row #submit-btn {
+    min-width: 180px;
+}
+
+#status {
+    display: none;
+    text-align: center;
+    color: var(--muted);
+    min-height: 18px;
+    font-size: 0.85rem;
+    letter-spacing: 0.03em;
+}
+
+.final {
+    padding: 20px 24px;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: 12px;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    display: none;
+    text-align: center;
+}
+
+.final.visible {
+    display: block;
+}
+
+.final h2 {
+    margin: 0 0 10px;
+    color: var(--ok);
+    font-size: 1rem;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.final p {
+    margin: 12px 0 0;
+}
+
+.final-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-top: 18px;
+}
+
+.final-actions button,
+.final-actions .btn {
+    padding: 10px 20px;
+    font-size: 0.78rem;
+}
+
+/* Non-button links (none today, but the card can hold some). */
+.final a:not(.btn) {
+    color: var(--accent);
+    text-decoration: none;
+    border-bottom: 1px solid rgba(125, 211, 252, 0.3);
+}
+
+.global-lock {
+    position: absolute;
+    left: 50%;
+    bottom: calc(100% + 20px);
+    transform: translateX(-50%);
+    white-space: nowrap;
+    padding: 12px 24px;
+    background: var(--glass-bg);
+    border: 1px solid rgba(248, 113, 113, 0.25);
+    border-radius: 10px;
+    color: var(--ko);
+    text-align: center;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    display: none;
+}
+
+.global-lock.visible {
+    display: block;
+}
+
+.global-lock .label {
+    font-size: 0.75rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    opacity: 0.8;
+}
+
+.global-lock .countdown {
+    margin-top: 4px;
+    font-variant-numeric: tabular-nums;
+    font-size: 1.6rem;
+    letter-spacing: 0.08em;
+}
+
+@media (max-width: 640px) {
+    .code {
+        flex-direction: column;
+        gap: 20px;
+    }
+
+    .cell input {
+        width: calc(var(--field-length, 2) * 17px + 14px);
+        min-width: 31px;
+        height: 56px;
+        font-size: 1.4rem;
+    }
+}
