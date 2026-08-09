@@ -63,18 +63,9 @@ function buildLayout(layout, specs) {
 }
 
 function applyGroups(serverGroups) {
-    const total = fieldSpecs.length;
-    const valid =
-        total > 0 &&
-        Array.isArray(serverGroups) &&
-        serverGroups.length > 0 &&
-        serverGroups.every((ids) => Array.isArray(ids) && ids.length > 0 &&
-            ids.every((fid) => Number.isInteger(fid) && fid >= 0 && fid < total)) &&
-        serverGroups.flat().slice().sort((a, b) => a - b).join(",") ===
-            Array.from({ length: total }, (_, i) => i).join(",");
-
-    groups = valid ? serverGroups.map((ids) => ids.slice().sort((a, b) => a - b))
-                   : Array.from({ length: total }, (_, i) => [i]);
+    // Le serveur envoie des groupes déjà normalisés (fields = source de vérité,
+    // singletons ajoutés pour les manquants, indices invalides filtrés).
+    groups = (serverGroups || []).map((ids) => ids.slice().sort((a, b) => a - b));
     groupOf = {};
     groups.forEach((ids, gi) => ids.forEach((fid) => { groupOf[fid] = gi; }));
 
@@ -96,19 +87,18 @@ function isGroupRevealed(gi) {
 function showGroupHint(fid) {
     const gi = groupOf[fid];
     if (gi === undefined || gi === hintedGroup) return;
+    const ids = groups[gi] || [];
+    // Un groupe "seul" n'a plus d'indicateur visuel (ni bord, ni tooltip).
+    if (ids.length <= 1) return;
     if (isGroupRevealed(gi)) return;
     hideGroupHint();
     hintedGroup = gi;
 
-    const ids = groups[gi];
     const cells = ids.map(cellOf).filter(Boolean);
     if (!cells.length) return;
     cells.forEach((c) => c.classList.add("group-hl"));
 
-    els.groupTip.textContent =
-        ids.length > 1
-            ? `${ids.length} champs seront révélés ensemble`
-            : "Ce champ sera révélé seul";
+    els.groupTip.textContent = `${ids.length} champs seront révélés ensemble`;
 
     const wrap = document.querySelector(".code-wrap").getBoundingClientRect();
     const rects = cells.map((c) => c.getBoundingClientRect());

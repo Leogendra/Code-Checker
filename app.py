@@ -69,9 +69,57 @@ if not FIELD_SPECS or not isinstance(FIELD_SPECS, list):
     raise SystemExit('fields manquant dans config.json — liste de {"answer", "length", "alphabet"}')
 
 NUM_FIELDS = len(FIELD_SPECS)
-GROUPS = CONFIG.get("groups", [list(range(NUM_FIELDS))])
-if sum(len(g) for g in GROUPS) != NUM_FIELDS:
-    raise SystemExit("groups dans config.json ne couvre pas exactement tous les champs.")
+
+
+def _normalize_groups(raw, num_fields: int) -> list[list[int]]:
+    """Filtre les indices invalides/dupliqués et ajoute un singleton par field manquant."""
+    seen: set[int] = set()
+    groups: list[list[int]] = []
+    if isinstance(raw, list):
+        for g in raw:
+            if not isinstance(g, list):
+                continue
+            cleaned: list[int] = []
+            for i in g:
+                if isinstance(i, int) and 0 <= i < num_fields and i not in seen:
+                    cleaned.append(i)
+                    seen.add(i)
+            if cleaned:
+                groups.append(cleaned)
+    for i in range(num_fields):
+        if i not in seen:
+            groups.append([i])
+    return groups
+
+
+def _normalize_layout(raw, num_fields: int) -> list[list]:
+    """Filtre les indices invalides/dupliqués, garde les séparateurs, appende les fields manquants en une seule part."""
+    seen: set[int] = set()
+    parts: list[list] = []
+    if isinstance(raw, list):
+        for part in raw:
+            if not isinstance(part, list):
+                continue
+            cleaned: list = []
+            for item in part:
+                if isinstance(item, bool):
+                    continue
+                if isinstance(item, int):
+                    if 0 <= item < num_fields and item not in seen:
+                        cleaned.append(item)
+                        seen.add(item)
+                elif isinstance(item, str):
+                    cleaned.append(item)
+            if cleaned:
+                parts.append(cleaned)
+    missing = [i for i in range(num_fields) if i not in seen]
+    if missing:
+        parts.append(missing)
+    return parts
+
+
+GROUPS = _normalize_groups(CONFIG.get("groups"), NUM_FIELDS)
+LAYOUT = _normalize_layout(CONFIG.get("layout"), NUM_FIELDS)
 GROUP_OF = {fid: gi for gi, fids in enumerate(GROUPS) for fid in fids}
 LOCK_DURATION = timedelta(minutes=LOCK_TIME_MINUTES)
 PERMANENT_LOCK = "9999-12-31T00:00:00+00:00"
@@ -188,7 +236,7 @@ def api_state():
                 {"id": i, "length": s.get("length", 2), "alphabet": s.get("alphabet", "digits")}
                 for i, s in enumerate(FIELD_SPECS)
             ],
-            "layout": CONFIG.get("layout"),
+            "layout": LAYOUT,
             "all_solved": all(f["solved"] for f in data["fields"]),
             "global_locked_until": iso(global_lock_active()),
             "message": data.get("message") or None,

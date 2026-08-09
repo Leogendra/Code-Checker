@@ -171,7 +171,6 @@
     font-size: 2rem;
     font-weight: 700;
     color: var(--accent);
-    text-shadow: 0 0 12px rgba(125, 211, 252, 0.6);
     user-select: none;
     align-self: flex-end;
 }
