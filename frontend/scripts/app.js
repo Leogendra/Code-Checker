@@ -205,7 +205,7 @@ function render() {
     els.submitBtn.disabled = gl;
 
     const won = state.all_solved && showVerdict;
-    els.submitRow.style.display = won ? "none" : "flex";
+    els.submitRow.style.visibility = (won || (gl && showVerdict)) ? "hidden" : "visible";
     if (won) revealFinal();
 
     renderStatus();
