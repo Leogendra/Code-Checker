@@ -24,14 +24,23 @@ const els = {
     finalPayload: document.getElementById("final-payload"),
     finalSave: document.getElementById("final-save"),
     finalCurrent: document.getElementById("final-current"),
+    lockUntil: document.getElementById("lock-until"),
 };
 
-function getMinutes() {
+function getLockDuration() {
+    if (els.lockUntil.value) {
+        const target = new Date(els.lockUntil.value);
+        const diffMs = target.getTime() - Date.now();
+        if (diffMs > 0) {
+            return { minutes: diffMs / 60000, label: target.toLocaleString() };
+        }
+    }
     const raw = els.minutes.value.trim();
-    if (raw === "") return null;
-    const n = Number(raw);
-    if (!isFinite(n) || n <= 0) return null;
-    return n;
+    if (raw !== "") {
+        const n = Number(raw);
+        if (isFinite(n) && n > 0) return { minutes: n, label: n + "min" };
+    }
+    return { minutes: null, label: t("permanent") };
 }
 
 function getToken() {
@@ -222,10 +231,9 @@ async function refresh() {
 }
 
 async function globalLock() {
-    const minutes = getMinutes();
+    const { minutes, label } = getLockDuration();
     try {
         await api("POST", "/api/admin/global-lock", { minutes });
-        const label = minutes ? minutes + "min" : t("permanent");
         setMsg(t("site_locked", { label }));
         await refresh();
     } catch (e) {
@@ -255,10 +263,9 @@ async function resetFields() {
 }
 
 async function lockFields(ids) {
-    const minutes = getMinutes();
+    const { minutes, label } = getLockDuration();
     try {
         await api("POST", "/api/admin/lock", { field_ids: ids, minutes });
-        const label = minutes ? `${minutes}min` : t("permanent");
         setMsg(t("locked_result", { label, ids: ids.join(", ") }));
         await refresh();
     } catch (e) {

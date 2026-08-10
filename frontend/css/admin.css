@@ -161,9 +161,9 @@
 
 .duration {
     display: flex;
-    align-items: center;
+    flex-direction: column;
     gap: 8px;
-    padding: 6px 12px;
+    padding: 10px 12px;
     background: var(--glass-bg);
     border: 1px solid var(--glass-border);
     border-radius: 10px;
@@ -171,15 +171,21 @@
     -webkit-backdrop-filter: blur(12px);
 }
 
+.duration-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
 .duration label {
     font-size: 0.7rem;
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--muted);
+    min-width: 52px;
 }
 
 .duration input {
-    width: 70px;
     height: 30px;
     padding: 0 8px;
     background: transparent;
@@ -189,6 +195,17 @@
     font-size: 0.85rem;
     outline: none;
     text-align: center;
+}
+
+.duration input[type="number"] {
+    width: 70px;
+}
+
+.duration input[type="datetime-local"] {
+    width: auto;
+    flex: 1;
+    text-align: left;
+    color-scheme: dark;
 }
 
 .duration input:focus {

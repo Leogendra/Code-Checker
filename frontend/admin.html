@@ -35,9 +35,15 @@
             </div>
 
             <div class="duration">
-                <label for="minutes" data-translation="duration">Duration</label>
-                <input id="minutes" type="number" min="0" step="1" placeholder="∞" />
-                <span class="hint" data-translation="minutes_hint">minutes</span>
+                <div class="duration-row">
+                    <label for="minutes" data-translation="duration">Duration</label>
+                    <input id="minutes" type="number" min="0" step="1" placeholder="∞" />
+                    <span class="hint" data-translation="minutes_hint">minutes</span>
+                </div>
+                <div class="duration-row">
+                    <label for="lock-until" data-translation="lock_until_label">Until</label>
+                    <input id="lock-until" type="datetime-local" />
+                </div>
             </div>
 
             <div class="message-card">
