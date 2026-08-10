@@ -98,6 +98,7 @@ async function loadState() {
         state.all_solved = data.all_solved;
         state.global_locked_until = data.global_locked_until;
         state.message = data.message || null;
+        state.lock_message = data.lock_message || null;
         render();
     } catch (e) {
         setStatus(t("connection_check"));

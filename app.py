@@ -252,6 +252,7 @@ def api_state():
             "all_solved": all(f["solved"] for f in data["fields"]),
             "global_locked_until": iso(global_lock_active()),
             "message": data.get("message") or None,
+            "lock_message": data.get("lock_message") or None,
             "language": LANGUAGE,
         }
     )
@@ -424,9 +425,29 @@ def api_admin_state():
             "all_solved": all(f["solved"] for f in fields),
             "global_locked_until": iso(gl),
             "message": data.get("message") or None,
+            "lock_message": data.get("lock_message") or None,
             "language": LANGUAGE,
         }
     )
+
+
+@app.post("/api/admin/lock-message")
+@limiter.limit("30 per minute")
+@require_admin
+def api_admin_lock_message():
+    """Custom label shown on the global-lock overlay (replaces 'Come back later')."""
+    payload = request.get_json(silent=True) or {}
+    msg = payload.get("message")
+    if msg is None:
+        msg = ""
+    if not isinstance(msg, str):
+        return jsonify({"error": "invalid message"}), 400
+    msg = msg.strip()[:MESSAGE_MAX_LEN]
+    with _data_lock:
+        data = load_data()
+        data["lock_message"] = msg or None
+        save_data(data)
+    return jsonify({"lock_message": msg or None})
 
 
 @app.post("/api/admin/message")

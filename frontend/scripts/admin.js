@@ -25,6 +25,10 @@ const els = {
     finalSave: document.getElementById("final-save"),
     finalCurrent: document.getElementById("final-current"),
     lockUntil: document.getElementById("lock-until"),
+    lockMsgInput: document.getElementById("lock-msg"),
+    lockMsgSend: document.getElementById("lock-msg-send"),
+    lockMsgClear: document.getElementById("lock-msg-clear"),
+    lockMsgCurrent: document.getElementById("lock-msg-current"),
 };
 
 function getLockDuration() {
@@ -174,7 +178,6 @@ function renderRows(data) {
 
 function renderMessage(msg) {
     els.msgCurrent.textContent = msg ? t("message_shown", { msg }) : t("no_message_shown");
-    // Do not overwrite ongoing user input (refresh runs every 15s).
     if (document.activeElement !== els.msgInput) els.msgInput.value = msg || "";
 }
 
@@ -183,6 +186,21 @@ async function sendMessage(text) {
         const data = await api("POST", "/api/admin/message", { message: text });
         renderMessage(data.message);
         setMsg(data.message ? t("message_published") : t("message_cleared"));
+    } catch (e) {
+        if (e.message !== "unauthorized") setMsg(t("error", { msg: e.message }), true);
+    }
+}
+
+function renderLockMessage(msg) {
+    els.lockMsgCurrent.textContent = msg ? t("lock_message_shown", { msg }) : t("no_lock_message_shown");
+    if (document.activeElement !== els.lockMsgInput) els.lockMsgInput.value = msg || "";
+}
+
+async function sendLockMessage(text) {
+    try {
+        const data = await api("POST", "/api/admin/lock-message", { message: text });
+        renderLockMessage(data.lock_message);
+        setMsg(data.lock_message ? t("lock_message_published") : t("lock_message_cleared"));
     } catch (e) {
         if (e.message !== "unauthorized") setMsg(t("error", { msg: e.message }), true);
     }
@@ -223,6 +241,7 @@ async function refresh() {
         renderGlobal(stateData);
         renderRows(stateData);
         renderMessage(stateData.message);
+        renderLockMessage(stateData.lock_message);
         renderFinalCard(finalData);
         setMsg("");
     } catch (e) {
@@ -313,6 +332,11 @@ els.msgClear.addEventListener("click", () => { els.msgInput.value = ""; sendMess
 els.msgInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") sendMessage(els.msgInput.value.trim());
 });
+els.lockMsgSend.addEventListener("click", () => sendLockMessage(els.lockMsgInput.value.trim()));
+els.lockMsgClear.addEventListener("click", () => { els.lockMsgInput.value = ""; sendLockMessage(""); });
+els.lockMsgInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") sendLockMessage(els.lockMsgInput.value.trim());
+});
 els.finalSave.addEventListener("click", saveFinal);
 
 loadLanguage();
@@ -327,6 +351,7 @@ if (getToken()) {
             renderGlobal(stateData);
             renderRows(stateData);
             renderMessage(stateData.message);
+            renderLockMessage(stateData.lock_message);
             renderFinalCard(finalData);
         },
         () => { /* showLogin was already called on 401 */ }

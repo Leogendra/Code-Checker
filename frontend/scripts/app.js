@@ -19,6 +19,7 @@ const state = {
     all_solved: false,
     global_locked_until: null,
     message: null,
+    lock_message: null,
 };
 
 const els = {
@@ -198,7 +199,8 @@ function render() {
     els.globalLock.classList.toggle("visible", gl && showVerdict);
     if (gl && showVerdict) {
         const ms = new Date(state.global_locked_until).getTime() - Date.now();
-        els.globalLock.innerHTML = `<div class="label">${t("come_back_later")}</div><div class="countdown">${fmtCountdown(ms)}</div>`;
+        const lockLabel = state.lock_message || t("come_back_later");
+        els.globalLock.innerHTML = `<div class="label">${lockLabel}</div><div class="countdown">${fmtCountdown(ms)}</div>`;
     } else {
         els.globalLock.innerHTML = "";
     }

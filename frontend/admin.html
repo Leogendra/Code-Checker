@@ -59,6 +59,19 @@
                 <div id="msg-current" class="message-current"></div>
             </div>
 
+            <div class="message-card">
+                <label for="lock-msg" data-translation="lock_message_label">Lock message</label>
+                <input id="lock-msg" type="text" maxlength="280" autocomplete="off"
+                    data-translation-placeholder="lock_message_placeholder"
+                    placeholder="Come back later" />
+                <div class="message-row">
+                    <button id="lock-msg-send" data-translation="send">Send</button>
+                    <button id="lock-msg-clear" data-translation="clear">Clear</button>
+                    <span class="hint" data-translation="lock_message_hint">shown on the lock overlay</span>
+                </div>
+                <div id="lock-msg-current" class="message-current"></div>
+            </div>
+
             <div class="bulk">
                 <button id="refresh" data-translation="refresh">Refresh</button>
                 <button id="reset-btn" data-translation="reset_fields">Reset fields</button>
