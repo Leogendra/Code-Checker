@@ -255,6 +255,56 @@
     word-break: break-word;
 }
 
+.final-card {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px 18px;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: 10px;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+
+.final-card > label {
+    font-size: 0.7rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+
+.final-fields {
+    display: grid;
+    grid-template-columns: 100px 1fr;
+    align-items: center;
+    gap: 8px 12px;
+}
+
+.final-field-label {
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    text-align: right;
+    white-space: nowrap;
+}
+
+.final-fields input {
+    height: 38px;
+    padding: 0 12px;
+    background: transparent;
+    color: var(--text);
+    border: 1px solid var(--glass-border);
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-family: inherit;
+    outline: none;
+}
+
+.final-fields input:focus {
+    border-color: var(--glass-border-strong);
+}
+
 .msg {
     text-align: center;
     font-size: 0.8rem;

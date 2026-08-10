@@ -1,15 +1,14 @@
-import json
-import os
-import subprocess
-import sys
-import threading
-from datetime import datetime, timedelta, timezone
-from functools import wraps
-
-from dotenv import load_dotenv
 from flask import Flask, jsonify, request, send_from_directory
-from flask_limiter import Limiter
+from datetime import datetime, timedelta, timezone
 from flask_limiter.util import get_remote_address
+from flask_limiter import Limiter
+from dotenv import load_dotenv
+from functools import wraps
+import subprocess
+import threading
+import json
+import sys
+import os
 
 _ROOT_DIR = os.path.dirname(__file__)
 
@@ -35,6 +34,8 @@ BACKEND_DIR = os.path.join(_ROOT_DIR, "backend")
 DATA_PATH = os.path.join(BACKEND_DIR, "data.json")
 INIT_SCRIPT = os.path.join(BACKEND_DIR, "init_data.py")
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "frontend")
+
+
 
 
 def _matches_type(val: str, input_type: str) -> bool:
@@ -535,6 +536,39 @@ def api_admin_global_unlock():
     return jsonify({"global_locked_until": None})
 
 
+@app.get("/api/admin/final")
+@limiter.limit("30 per minute")
+@require_admin
+def api_admin_final_get():
+    with _data_lock:
+        data = load_data()
+    return jsonify(data.get("final") or {})
+
+
+@app.post("/api/admin/final")
+@limiter.limit("30 per minute")
+@require_admin
+def api_admin_final_set():
+    payload = request.get_json(silent=True) or {}
+    title = payload.get("title", "")
+    note = payload.get("note", "")
+    final_payload = payload.get("payload", "")
+    if not isinstance(title, str) or not isinstance(note, str) or not isinstance(final_payload, str):
+        return jsonify({"error": "invalid fields"}), 400
+    final = {}
+    if title.strip():
+        final["title"] = title.strip()
+    if note.strip():
+        final["note"] = note.strip()
+    if final_payload.strip():
+        final["payload"] = final_payload.strip()
+    with _data_lock:
+        data = load_data()
+        data["final"] = final
+        save_data(data)
+    return jsonify(final)
+
+
 @app.post("/api/admin/reset")
 @limiter.limit("10 per minute")
 @require_admin
@@ -553,6 +587,8 @@ def api_admin_reset():
         save_data(data)
     _global_locked_until = None
     return jsonify({"reset": True})
+
+
 
 
 if __name__ == "__main__":

@@ -59,6 +59,29 @@
             </div>
 
             <div id="rows" class="rows"></div>
+
+            <div class="final-card">
+                <label data-translation="final_section_label">Final message</label>
+                <div class="final-fields">
+                    <span class="final-field-label" data-translation="final_title_label">Title (bravo)</span>
+                    <input id="final-title" type="text" maxlength="100" autocomplete="off"
+                        data-translation-placeholder="final_title_placeholder"
+                        placeholder="e.g. Bravo" />
+                    <span class="final-field-label" data-translation="final_note_label">Note</span>
+                    <input id="final-note" type="text" maxlength="500" autocomplete="off"
+                        data-translation-placeholder="final_note_placeholder"
+                        placeholder="Message displayed after the title" />
+                    <span class="final-field-label" data-translation="final_payload_label">Payload</span>
+                    <input id="final-payload" type="text" maxlength="500" autocomplete="off"
+                        data-translation-placeholder="final_payload_placeholder"
+                        placeholder="Data to copy" />
+                </div>
+                <div class="message-row">
+                    <button id="final-save" data-translation="save">Save</button>
+                </div>
+                <div id="final-current" class="message-current"></div>
+            </div>
+
             <div id="msg" class="msg"></div>
         </div>
     </div>

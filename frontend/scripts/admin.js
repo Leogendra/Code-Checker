@@ -19,6 +19,11 @@ const els = {
     globalStatus: document.getElementById("global-status"),
     globalLockBtn: document.getElementById("global-lock-btn"),
     globalUnlockBtn: document.getElementById("global-unlock-btn"),
+    finalTitle: document.getElementById("final-title"),
+    finalNote: document.getElementById("final-note"),
+    finalPayload: document.getElementById("final-payload"),
+    finalSave: document.getElementById("final-save"),
+    finalCurrent: document.getElementById("final-current"),
 };
 
 function getMinutes() {
@@ -174,12 +179,42 @@ async function sendMessage(text) {
     }
 }
 
+function renderFinalCard(data) {
+    const title = data.title || "";
+    const note = data.note || "";
+    const payload = data.payload || "";
+    els.finalCurrent.textContent = payload
+        ? t("final_shown", { payload })
+        : t("final_no_payload");
+    if (document.activeElement !== els.finalTitle) els.finalTitle.value = title;
+    if (document.activeElement !== els.finalNote) els.finalNote.value = note;
+    if (document.activeElement !== els.finalPayload) els.finalPayload.value = payload;
+}
+
+async function saveFinal() {
+    try {
+        const data = await api("POST", "/api/admin/final", {
+            title: els.finalTitle.value.trim(),
+            note: els.finalNote.value.trim(),
+            payload: els.finalPayload.value.trim(),
+        });
+        renderFinalCard(data);
+        setMsg(t("final_saved"));
+    } catch (e) {
+        if (e.message !== "unauthorized") setMsg(t("error", { msg: e.message }), true);
+    }
+}
+
 async function refresh() {
     try {
-        const data = await api("GET", "/api/admin/state");
-        renderGlobal(data);
-        renderRows(data);
-        renderMessage(data.message);
+        const [stateData, finalData] = await Promise.all([
+            api("GET", "/api/admin/state"),
+            api("GET", "/api/admin/final"),
+        ]);
+        renderGlobal(stateData);
+        renderRows(stateData);
+        renderMessage(stateData.message);
+        renderFinalCard(finalData);
         setMsg("");
     } catch (e) {
         if (e.message !== "unauthorized") setMsg(t("error", { msg: e.message }), true);
@@ -271,12 +306,22 @@ els.msgClear.addEventListener("click", () => { els.msgInput.value = ""; sendMess
 els.msgInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") sendMessage(els.msgInput.value.trim());
 });
+els.finalSave.addEventListener("click", saveFinal);
 
 loadLanguage();
 
 if (getToken()) {
-    api("GET", "/api/admin/state").then(
-        (data) => { showPanel(); renderGlobal(data); renderRows(data); renderMessage(data.message); },
+    Promise.all([
+        api("GET", "/api/admin/state"),
+        api("GET", "/api/admin/final"),
+    ]).then(
+        ([stateData, finalData]) => {
+            showPanel();
+            renderGlobal(stateData);
+            renderRows(stateData);
+            renderMessage(stateData.message);
+            renderFinalCard(finalData);
+        },
         () => { /* showLogin was already called on 401 */ }
     );
 } else {
