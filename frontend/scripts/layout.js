@@ -46,7 +46,8 @@ function buildLayout(layout, specs) {
                 dotEl.className = "dot";
                 dotEl.textContent = item;
                 partEl.appendChild(dotEl);
-            } else {
+            }
+            else {
                 partEl.appendChild(createCell(item, specs[item]));
             }
         });
@@ -86,37 +87,47 @@ function isGroupRevealed(gi) {
 
 function showGroupHint(fid) {
     const gi = groupOf[fid];
-    if (gi === undefined || gi === hintedGroup) return;
+    if (gi === undefined || gi === hintedGroup) { return; }
     const ids = groups[gi] || [];
-    // A "lone" group no longer shows any visual indicator (no border, no tooltip).
-    if (ids.length <= 1) return;
-    if (isGroupRevealed(gi)) return;
+    if (ids.length < 2 || isGroupRevealed(gi)) { return; }
     hideGroupHint();
     hintedGroup = gi;
 
     const cells = ids.map(cellOf).filter(Boolean);
-    if (!cells.length) return;
-    cells.forEach((c) => c.classList.add("group-hl"));
+    if (cells.length) {
+        cells.forEach((c) => c.classList.add("group-hl"));
 
-    els.groupTip.textContent = t("group_reveal_together", { count: ids.length });
+        els.groupTip.textContent = t("group_reveal_together", { count: ids.length });
 
-    const wrap = document.querySelector(".code-wrap").getBoundingClientRect();
-    const rects = cells.map((c) => c.getBoundingClientRect());
-    const left = Math.min(...rects.map((r) => r.left));
-    const right = Math.max(...rects.map((r) => r.right));
-    const center = (left + right) / 2 - wrap.left;
+        const wrap = document.querySelector(".code-wrap").getBoundingClientRect();
+        const rects = cells.map((c) => c.getBoundingClientRect());
+        const groupCenterVP = (Math.min(...rects.map((r) => r.left)) + Math.max(...rects.map((r) => r.right))) / 2;
 
-    els.groupTip.classList.add("visible");
-    const half = els.groupTip.offsetWidth / 2;
-    els.groupTip.style.left = `${Math.min(Math.max(center, half), wrap.width - half)}px`;
+        els.groupTip.classList.add("visible");
+        const halfW = els.groupTip.offsetWidth / 2;
+        const heightT = els.groupTip.offsetHeight;
+
+        // X: center on the group horizontally, clamped to the viewport (not .code-wrap,
+        // which can be narrower than the tooltip on mobile or when the group is near the edge).
+        const vpMargin = 8;
+        const clampedVP = Math.min(Math.max(groupCenterVP, halfW + vpMargin), window.innerWidth - halfW - vpMargin);
+        els.groupTip.style.left = `${clampedVP - wrap.left}px`;
+
+        // Y: above the specific hovered cell (not the whole wrap), so on mobile where
+        // cells stack vertically the tooltip follows the cell instead of jumping to the top.
+        const hoveredRect = cellOf(fid).getBoundingClientRect();
+        els.groupTip.style.top = `${hoveredRect.top - wrap.top - heightT - 14}px`;
+    }
 }
 
 function hideGroupHint() {
     if (hintTimer) { clearTimeout(hintTimer); hintTimer = null; }
-    if (hintedGroup === null) return;
-    hintedGroup = null;
-    document.querySelectorAll(".cell.group-hl").forEach((c) => c.classList.remove("group-hl"));
-    els.groupTip.classList.remove("visible");
+    if (hintedGroup !== null) {
+        hintedGroup = null;
+        document.querySelectorAll(".cell.group-hl").forEach((c) => c.classList.remove("group-hl"));
+        els.groupTip.classList.remove("visible");
+        console.log("hideGroupHint");
+    }
 }
 
 function bindGroupHint(cell) {
@@ -126,7 +137,7 @@ function bindGroupHint(cell) {
         if (e.pointerType === "mouse") showGroupHint(fid);
     });
     cell.addEventListener("pointerdown", (e) => {
-        if (e.pointerType === "mouse") return;
+        if (e.pointerType === "mouse") { return; }
         hintTimer = setTimeout(() => {
             hintTimer = null;
             showGroupHint(fid);
