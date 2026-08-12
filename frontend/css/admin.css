@@ -61,10 +61,10 @@
 
 .row {
     display: grid;
-    grid-template-columns: 32px 1fr auto auto;
+    grid-template-columns: 26px 56px minmax(60px, 1fr) auto auto auto;
     align-items: center;
-    gap: 12px;
-    padding: 10px 14px;
+    gap: 8px;
+    padding: 8px 12px;
     background: var(--glass-bg);
     border: 1px solid var(--glass-border);
     border-radius: 10px;
@@ -72,31 +72,55 @@
     -webkit-backdrop-filter: blur(12px);
 }
 
-.row .fid {
-    color: var(--muted);
-    font-size: 0.85rem;
-}
-
 .row .status {
-    font-size: 0.8rem;
-    color: var(--muted);
-    letter-spacing: 0.03em;
-    font-variant-numeric: tabular-nums;
+    font-size: 1.05rem;
+    text-align: center;
+    line-height: 1;
 }
 
-.row.solved .status {
+.row .last-attempt {
+    font-size: 0.85rem;
+    color: var(--muted);
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.row.solved .last-attempt {
     color: var(--ok);
 }
 
-.row.locked .status {
+.row.wrong .last-attempt {
     color: var(--ko);
 }
 
+.row .solution-input {
+    height: 30px;
+    padding: 0 8px;
+    background: transparent;
+    color: var(--text);
+    border: 1px solid var(--glass-border);
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-family: inherit;
+    outline: none;
+    min-width: 0;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.row .solution-input:focus {
+    border-color: var(--glass-border-strong);
+}
+
 .row button {
-    padding: 8px 14px;
+    padding: 6px 10px;
     font-size: 0.7rem;
-    letter-spacing: 0.1em;
-    min-width: 90px;
+    letter-spacing: 0.05em;
+    min-width: 0;
 }
 
 .bulk {

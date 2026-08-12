@@ -1,5 +1,3 @@
-const PERMANENT_LOCK = "9999-12-31T00:00:00+00:00";
-
 const els = {
     login: document.getElementById("login"),
     pwd: document.getElementById("pwd"),
@@ -98,21 +96,13 @@ function setMsg(text, isErr) {
     els.msg.classList.toggle("err", !!isErr);
 }
 
-function formatLock(f) {
-    if (f.solved) return t("solved");
-    if (!f.locked_until) return t("free");
-    if (f.permanent || f.locked_until === PERMANENT_LOCK) return t("locked_permanent");
-    const timeMs = new Date(f.locked_until).getTime();
-    const now = Date.now();
-    if (timeMs <= now) return t("free");
-    const s = Math.floor((timeMs - now) / 1000);
-    const h = Math.floor(s / 3600);
-    const m = Math.floor((s % 3600) / 60);
-    const sec = s % 60;
-    const pad = (n) => String(n).padStart(2, "0");
-    const cd = h > 0 ? `${h}h${pad(m)}` : `${m}:${pad(sec)}`;
-    return t("locked_with_countdown", { cd });
+function fieldStatus(f) {
+    if (f.solved) return "solved";
+    if (f.value) return "wrong";
+    return "waiting";
 }
+
+const STATUS_EMOJI = { solved: "✅", wrong: "❌", waiting: "🕛" };
 
 let _globalUntil = null;
 
@@ -143,23 +133,35 @@ function renderGlobal(data) {
 }
 
 function renderRows(data) {
+    // Avoid clobbering an in-progress edit inside a row (solution input, etc.).
+    if (els.rows.contains(document.activeElement)) return;
     els.rows.innerHTML = "";
     data.fields.forEach((f) => {
         const row = document.createElement("div");
-        row.className = "row";
-        if (f.solved) row.classList.add("solved");
-        else if (f.locked_until) {
-            const timeMs = new Date(f.locked_until).getTime();
-            if (f.permanent || timeMs > Date.now()) row.classList.add("locked");
-        }
-
-        const fid = document.createElement("div");
-        fid.className = "fid";
-        fid.textContent = "#" + f.id;
+        const st = fieldStatus(f);
+        row.className = "row " + st;
 
         const status = document.createElement("div");
         status.className = "status";
-        status.textContent = formatLock(f);
+        status.textContent = STATUS_EMOJI[st];
+
+        const lastAttempt = document.createElement("div");
+        lastAttempt.className = "last-attempt";
+        lastAttempt.textContent = st === "waiting" ? "" : (f.value || "");
+
+        const solutionInput = document.createElement("input");
+        solutionInput.type = "text";
+        solutionInput.className = "solution-input";
+        solutionInput.value = f.answer || "";
+        solutionInput.autocomplete = "off";
+        solutionInput.spellcheck = false;
+
+        const saveBtn = document.createElement("button");
+        saveBtn.textContent = t("validate");
+        saveBtn.addEventListener("click", () => saveSolution(f.id, solutionInput.value));
+        solutionInput.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") saveSolution(f.id, solutionInput.value);
+        });
 
         const lockBtn = document.createElement("button");
         lockBtn.textContent = t("lock_btn");
@@ -171,9 +173,23 @@ function renderRows(data) {
         unlockBtn.disabled = f.solved || !f.locked_until;
         unlockBtn.addEventListener("click", () => unlockFields([f.id]));
 
-        row.append(fid, status, lockBtn, unlockBtn);
+        row.append(status, lastAttempt, solutionInput, saveBtn, lockBtn, unlockBtn);
         els.rows.appendChild(row);
     });
+}
+
+async function saveSolution(fid, answer) {
+    const trimmed = (answer || "").trim();
+    if (!trimmed) return;
+    try {
+        await api("POST", "/api/admin/solution", { field_id: fid, answer: trimmed });
+        setMsg(t("solution_saved", { id: fid }));
+        // Drop focus so renderRows can safely rebuild the row (see renderRows guard).
+        if (els.rows.contains(document.activeElement)) document.activeElement.blur();
+        await refresh();
+    } catch (e) {
+        if (e.message !== "unauthorized") setMsg(t("error", { msg: e.message }), true);
+    }
 }
 
 function renderMessage(msg) {

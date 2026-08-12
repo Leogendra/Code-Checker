@@ -414,6 +414,7 @@ def api_admin_state():
                 "locked_until": lu,
                 "permanent": lu == PERMANENT_LOCK,
                 "value": f.get("value"),
+                "answer": f.get("answer"),
                 "attempts": int(f.get("attempts") or 0),
                 "last_attempt_at": f.get("last_attempt_at"),
             }
@@ -588,6 +589,52 @@ def api_admin_final_set():
         data["final"] = final
         save_data(data)
     return jsonify(final)
+
+
+@app.post("/api/admin/solution")
+@limiter.limit("30 per minute")
+@require_admin
+def api_admin_solution():
+    """
+    Update the expected answer for a single field.
+    Body: {"field_id": int, "answer": str}
+    Recomputes `solved` from the current user attempt: solved iff value == new answer.
+    Never touches `value`, `attempts` or `last_attempt_at` (those track the user).
+    """
+    payload = request.get_json(silent=True) or {}
+    fid = payload.get("field_id")
+    answer = payload.get("answer")
+    if not isinstance(fid, int) or not 0 <= fid < NUM_FIELDS:
+        return jsonify({"error": "invalid field_id"}), 400
+    if not isinstance(answer, str):
+        return jsonify({"error": "invalid answer"}), 400
+    spec = FIELD_SPECS[fid]
+    flen = int(spec.get("length", 2))
+    input_type = spec.get("type", "digits")
+    if input_type == "digits":
+        if not answer.isdigit() or not (1 <= len(answer) <= flen):
+            return jsonify({"error": "invalid answer"}), 400
+    else:
+        answer_up = answer.upper() if input_type == "hex" else answer
+        if len(answer_up) != flen or not _matches_type(answer_up, input_type):
+            return jsonify({"error": "invalid answer"}), 400
+        answer = answer_up
+    normalized = _normalize(answer, input_type, flen)
+
+    with _data_lock:
+        data = load_data()
+        f = data["fields"][fid]
+        f["answer"] = normalized
+        value = f.get("value")
+        f["solved"] = bool(value) and value == normalized
+        save_data(data)
+        all_solved = all(x["solved"] for x in data["fields"])
+    return jsonify({
+        "field_id": fid,
+        "answer": normalized,
+        "solved": f["solved"],
+        "all_solved": all_solved,
+    })
 
 
 @app.post("/api/admin/reset")
