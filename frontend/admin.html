@@ -49,19 +49,6 @@
             </div>
 
             <div class="message-card">
-                <label for="msg" data-translation="player_message">Player message</label>
-                <input id="msg" type="text" maxlength="280" autocomplete="off"
-                    data-translation-placeholder="message_placeholder"
-                    placeholder="displayed under fields (empty = none)" />
-                <div class="message-row">
-                    <button id="msg-send" data-translation="send">Send</button>
-                    <button id="msg-clear" data-translation="clear">Clear</button>
-                    <span class="hint" data-translation="message_hidden_during_lock">hidden during global lock</span>
-                </div>
-                <div id="msg-current" class="message-current"></div>
-            </div>
-
-            <div class="message-card">
                 <label for="lock-msg" data-translation="lock_message_label">Lock message</label>
                 <input id="lock-msg" type="text" maxlength="280" autocomplete="off"
                     data-translation-placeholder="lock_message_placeholder"
@@ -72,6 +59,29 @@
                     <span class="hint" data-translation="lock_message_hint">shown on the lock overlay</span>
                 </div>
                 <div id="lock-msg-current" class="message-current"></div>
+
+                <hr />
+
+                <label for="fail-lock" data-translation="fail_lock_label">Lock time</label>
+                <div class="message-row">
+                    <input id="fail-lock" type="number" min="0.1" step="0.1" autocomplete="off" />
+                    <span class="hint" data-translation="minutes_unit">minutes</span>
+                    <button id="fail-lock-save" data-translation="save">Save</button>
+                </div>
+                <div id="fail-lock-current" class="message-current"></div>
+            </div>
+
+            <div class="message-card">
+                <label for="msg" data-translation="player_message">Player message</label>
+                <input id="msg" type="text" maxlength="280" autocomplete="off"
+                    data-translation-placeholder="message_placeholder"
+                    placeholder="displayed under fields (empty = none)" />
+                <div class="message-row">
+                    <button id="msg-send" data-translation="send">Send</button>
+                    <button id="msg-clear" data-translation="clear">Clear</button>
+                    <span class="hint" data-translation="message_hidden_during_lock">hidden during global lock</span>
+                </div>
+                <div id="msg-current" class="message-current"></div>
             </div>
 
             <div class="bulk">

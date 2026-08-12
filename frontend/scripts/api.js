@@ -125,6 +125,13 @@ async function revealFinal() {
     }
 }
 
+function hideFinal() {
+    els.final.classList.remove("visible");
+    els.final.innerHTML = "";
+    finalState = "idle";
+    finalRetryAt = 0;
+}
+
 function renderFinal(data) {
     els.final.innerHTML = "";
 

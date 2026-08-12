@@ -70,7 +70,7 @@
 .cell::after {
     content: "";
     position: absolute;
-    inset: -6px;
+    inset: -5px;
     border: 2px solid transparent;
     border-radius: 15px;
     pointer-events: none;

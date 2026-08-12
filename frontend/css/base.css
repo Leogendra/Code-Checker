@@ -8,8 +8,7 @@
     --accent: #5e5c6a;
     --ok: #4ade80;
     --ko: #f87171;
-    /* Group indicator: deliberately neither green nor red so it doesn't
-       clash with the solved / locked states. */
+    /* Group indicator */
     --hl: #7dd3fc;
     --hl-border: rgba(125, 211, 252, 0.4);
 }
@@ -25,36 +24,8 @@ html, body {
 }
 
 @font-face {
-  font-family: "Buis";
-  src: url("../fonts/Buis-MLyB.ttf") format("truetype");
-  font-weight: normal;
-  font-style: normal;
-}
-
-@font-face {
-  font-family: "FontsBombJigsaw";
-  src: url("../fonts/FontsBombJigsaw-0aEr.ttf") format("truetype");
-  font-weight: normal;
-  font-style: normal;
-}
-
-@font-face {
-  font-family: "Glitex";
-  src: url("../fonts/Glitex-gw7y6.otf") format("opentype");
-  font-weight: normal;
-  font-style: normal;
-}
-
-@font-face {
   font-family: "Merkur";
-  src: url("../fonts/Merkur-j147.otf") format("opentype");
-  font-weight: normal;
-  font-style: normal;
-}
-
-@font-face {
-  font-family: "Quasoid";
-  src: url("../fonts/QuasoidRegular-2D4l.ttf") format("truetype");
+  src: url("../assets/fonts/Merkur-j147-extended.otf") format("opentype");
   font-weight: normal;
   font-style: normal;
 }
