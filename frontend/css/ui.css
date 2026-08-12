@@ -139,6 +139,7 @@ button:disabled {
     letter-spacing: 0.08em;
 }
 
+
 @media (max-width: 640px) {
     .code {
         flex-direction: column;
@@ -146,9 +147,45 @@ button:disabled {
     }
 
     .cell input {
-        width: calc(var(--field-length, 2) * 17px + 14px);
-        min-width: 31px;
-        height: 56px;
-        font-size: 1.4rem;
+        width: calc(var(--field-length, 2) * 20px + 20px);
+        min-width: 45px;
+        height: 70px;
+        font-size: 2.0rem;
+    }
+
+    .submit-row #submit-btn {
+        padding: 14px 34px;
+        font-size: 1.08rem;
+        min-width: 216px;
+    }
+
+    .global-lock {
+        padding: 14px 29px;
+    }
+
+    .global-lock .label {
+        font-size: 0.9rem;
+    }
+
+    .global-lock .countdown {
+        font-size: 1.92rem;
+    }
+
+    .final {
+        padding: 25px 30px;
+    }
+
+    .final h2 {
+        font-size: 1.2rem;
+    }
+
+    .final p {
+        font-size: 1.08rem;
+    }
+
+    .final-actions button,
+    .final-actions .btn {
+        padding: 12px 25px;
+        font-size: 0.95rem;
     }
 }
