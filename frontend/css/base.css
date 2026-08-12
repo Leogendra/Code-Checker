@@ -24,37 +24,10 @@ html, body {
     min-height: 100vh;
 }
 
-@font-face {
-  font-family: "Buis";
-  src: url("../fonts/Buis-MLyB.ttf") format("truetype");
-  font-weight: normal;
-  font-style: normal;
-}
-
-@font-face {
-  font-family: "FontsBombJigsaw";
-  src: url("../fonts/FontsBombJigsaw-0aEr.ttf") format("truetype");
-  font-weight: normal;
-  font-style: normal;
-}
-
-@font-face {
-  font-family: "Glitex";
-  src: url("../fonts/Glitex-gw7y6.otf") format("opentype");
-  font-weight: normal;
-  font-style: normal;
-}
 
 @font-face {
   font-family: "Merkur";
-  src: url("../fonts/Merkur-j147.otf") format("opentype");
-  font-weight: normal;
-  font-style: normal;
-}
-
-@font-face {
-  font-family: "Quasoid";
-  src: url("../fonts/QuasoidRegular-2D4l.ttf") format("truetype");
+  src: url("../assets/fonts/Merkur-extended.otf") format("opentype");
   font-weight: normal;
   font-style: normal;
 }
