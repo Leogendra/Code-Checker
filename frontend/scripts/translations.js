@@ -75,6 +75,10 @@ const TRANSLATIONS = {
         "final_no_payload": "No payload set.",
         "validate": "Validate",
         "solution_saved": "Solution updated (field #{id}).",
+        "fail_lock_label": "Lock time",
+        "fail_lock_current": "Currently: {n}",
+        "fail_lock_saved": "Default lock duration saved.",
+        "minutes_unit": "minutes",
     },
     fr: {
         /* Player */
@@ -150,6 +154,10 @@ const TRANSLATIONS = {
         "final_no_payload": "Aucun payload défini.",
         "validate": "Valider",
         "solution_saved": "Solution mise à jour (champ #{id}).",
+        "fail_lock_label": "Durée du verrouillage",
+        "fail_lock_current": "Actuellement : {n}",
+        "fail_lock_saved": "Durée par défaut enregistrée.",
+        "minutes_unit": "minutes",
     },
 };
 

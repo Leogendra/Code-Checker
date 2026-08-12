@@ -126,7 +126,6 @@ def _normalize_layout(raw, num_fields: int) -> list[list]:
 GROUPS = _normalize_groups(CONFIG.get("groups"), NUM_FIELDS)
 LAYOUT = _normalize_layout(CONFIG.get("layout"), NUM_FIELDS)
 GROUP_OF = {fid: gi for gi, fids in enumerate(GROUPS) for fid in fids}
-LOCK_DURATION = timedelta(minutes=LOCK_TIME_MINUTES)
 PERMANENT_LOCK = "9999-12-31T00:00:00+00:00"
 MESSAGE_MAX_LEN = 280
 
@@ -180,6 +179,16 @@ def save_data(data: dict) -> None:
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
     os.replace(tmp, DATA_PATH)
+
+
+def current_lock_minutes(data: dict) -> float:
+    """Fail-lock duration in minutes: admin override in data.json, else config default."""
+    raw = data.get("lock_time_minutes")
+    try:
+        v = float(raw) if raw is not None else LOCK_TIME_MINUTES
+    except (TypeError, ValueError):
+        v = LOCK_TIME_MINUTES
+    return v if v > 0 else LOCK_TIME_MINUTES
 
 
 def group_revealed(data: dict, fid: int) -> bool:
@@ -339,7 +348,7 @@ def api_check():
         response: dict = {"results": results}
 
         if wrong:
-            _global_locked_until = now + LOCK_DURATION
+            _global_locked_until = now + timedelta(minutes=current_lock_minutes(data))
             data["global_locked_until"] = iso(_global_locked_until)
             response["global_locked"] = True
             response["global_retry_at"] = iso(_global_locked_until)
@@ -427,9 +436,39 @@ def api_admin_state():
             "global_locked_until": iso(gl),
             "message": data.get("message") or None,
             "lock_message": data.get("lock_message") or None,
+            "lock_time_minutes": current_lock_minutes(data),
             "language": LANGUAGE,
         }
     )
+
+
+@app.get("/api/admin/lock-time")
+@limiter.limit("30 per minute")
+@require_admin
+def api_admin_lock_time_get():
+    with _data_lock:
+        data = load_data()
+    return jsonify({"minutes": current_lock_minutes(data)})
+
+
+@app.post("/api/admin/lock-time")
+@limiter.limit("30 per minute")
+@require_admin
+def api_admin_lock_time_set():
+    """Set the fail-lock duration (minutes). Applies to future wrong-answer locks."""
+    payload = request.get_json(silent=True) or {}
+    raw = payload.get("minutes")
+    try:
+        minutes = float(raw)
+    except (TypeError, ValueError):
+        return jsonify({"error": "invalid minutes"}), 400
+    if minutes <= 0:
+        return jsonify({"error": "minutes must be > 0"}), 400
+    with _data_lock:
+        data = load_data()
+        data["lock_time_minutes"] = minutes
+        save_data(data)
+    return jsonify({"minutes": minutes})
 
 
 @app.post("/api/admin/lock-message")

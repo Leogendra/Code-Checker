@@ -27,6 +27,9 @@ const els = {
     lockMsgSend: document.getElementById("lock-msg-send"),
     lockMsgClear: document.getElementById("lock-msg-clear"),
     lockMsgCurrent: document.getElementById("lock-msg-current"),
+    failLockInput: document.getElementById("fail-lock"),
+    failLockSave: document.getElementById("fail-lock-save"),
+    failLockCurrent: document.getElementById("fail-lock-current"),
 };
 
 function getLockDuration() {
@@ -222,6 +225,38 @@ async function sendLockMessage(text) {
     }
 }
 
+function formatMinutes(minutes) {
+    const n = Number(minutes);
+    if (!isFinite(n) || n <= 0) return "";
+    if (n < 60) return `${n} min`;
+    const h = Math.floor(n / 60);
+    const m = Math.round(n % 60);
+    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+function renderFailLock(minutes) {
+    const n = Number(minutes);
+    const val = isFinite(n) && n > 0 ? n : "";
+    els.failLockCurrent.textContent = val ? t("fail_lock_current", { n: formatMinutes(n) }) : "";
+    if (document.activeElement !== els.failLockInput) els.failLockInput.value = val;
+}
+
+async function saveFailLock() {
+    const raw = els.failLockInput.value.trim();
+    const n = Number(raw);
+    if (!isFinite(n) || n <= 0) {
+        setMsg(t("error", { msg: "minutes" }), true);
+        return;
+    }
+    try {
+        const data = await api("POST", "/api/admin/lock-time", { minutes: n });
+        renderFailLock(data.minutes);
+        setMsg(t("fail_lock_saved"));
+    } catch (e) {
+        if (e.message !== "unauthorized") setMsg(t("error", { msg: e.message }), true);
+    }
+}
+
 function renderFinalCard(data) {
     const title = data.title || "";
     const note = data.note || "";
@@ -258,6 +293,7 @@ async function refresh() {
         renderRows(stateData);
         renderMessage(stateData.message);
         renderLockMessage(stateData.lock_message);
+        renderFailLock(stateData.lock_time_minutes);
         renderFinalCard(finalData);
         setMsg("");
     } catch (e) {
@@ -354,6 +390,8 @@ els.lockMsgInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") sendLockMessage(els.lockMsgInput.value.trim());
 });
 els.finalSave.addEventListener("click", saveFinal);
+els.failLockSave.addEventListener("click", saveFailLock);
+els.failLockInput.addEventListener("keydown", (e) => { if (e.key === "Enter") saveFailLock(); });
 
 loadLanguage();
 
@@ -368,6 +406,7 @@ if (getToken()) {
             renderRows(stateData);
             renderMessage(stateData.message);
             renderLockMessage(stateData.lock_message);
+            renderFailLock(stateData.lock_time_minutes);
             renderFinalCard(finalData);
         },
         () => { /* showLogin was already called on 401 */ }
