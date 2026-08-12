@@ -1,15 +1,14 @@
-import json
-import os
-import subprocess
-import sys
-import threading
-from datetime import datetime, timedelta, timezone
-from functools import wraps
-
-from dotenv import load_dotenv
 from flask import Flask, jsonify, request, send_from_directory
-from flask_limiter import Limiter
+from datetime import datetime, timedelta, timezone
 from flask_limiter.util import get_remote_address
+from flask_limiter import Limiter
+from dotenv import load_dotenv
+from functools import wraps
+import subprocess
+import threading
+import json
+import sys
+import os
 
 _ROOT_DIR = os.path.dirname(__file__)
 
@@ -35,6 +34,8 @@ BACKEND_DIR = os.path.join(_ROOT_DIR, "backend")
 DATA_PATH = os.path.join(BACKEND_DIR, "data.json")
 INIT_SCRIPT = os.path.join(BACKEND_DIR, "init_data.py")
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "frontend")
+
+
 
 
 def _matches_type(val: str, input_type: str) -> bool:
@@ -251,6 +252,7 @@ def api_state():
             "all_solved": all(f["solved"] for f in data["fields"]),
             "global_locked_until": iso(global_lock_active()),
             "message": data.get("message") or None,
+            "lock_message": data.get("lock_message") or None,
             "language": LANGUAGE,
         }
     )
@@ -412,6 +414,7 @@ def api_admin_state():
                 "locked_until": lu,
                 "permanent": lu == PERMANENT_LOCK,
                 "value": f.get("value"),
+                "answer": f.get("answer"),
                 "attempts": int(f.get("attempts") or 0),
                 "last_attempt_at": f.get("last_attempt_at"),
             }
@@ -423,9 +426,29 @@ def api_admin_state():
             "all_solved": all(f["solved"] for f in fields),
             "global_locked_until": iso(gl),
             "message": data.get("message") or None,
+            "lock_message": data.get("lock_message") or None,
             "language": LANGUAGE,
         }
     )
+
+
+@app.post("/api/admin/lock-message")
+@limiter.limit("30 per minute")
+@require_admin
+def api_admin_lock_message():
+    """Custom label shown on the global-lock overlay (replaces 'Come back later')."""
+    payload = request.get_json(silent=True) or {}
+    msg = payload.get("message")
+    if msg is None:
+        msg = ""
+    if not isinstance(msg, str):
+        return jsonify({"error": "invalid message"}), 400
+    msg = msg.strip()[:MESSAGE_MAX_LEN]
+    with _data_lock:
+        data = load_data()
+        data["lock_message"] = msg or None
+        save_data(data)
+    return jsonify({"lock_message": msg or None})
 
 
 @app.post("/api/admin/message")
@@ -535,6 +558,85 @@ def api_admin_global_unlock():
     return jsonify({"global_locked_until": None})
 
 
+@app.get("/api/admin/final")
+@limiter.limit("30 per minute")
+@require_admin
+def api_admin_final_get():
+    with _data_lock:
+        data = load_data()
+    return jsonify(data.get("final") or {})
+
+
+@app.post("/api/admin/final")
+@limiter.limit("30 per minute")
+@require_admin
+def api_admin_final_set():
+    payload = request.get_json(silent=True) or {}
+    title = payload.get("title", "")
+    note = payload.get("note", "")
+    final_payload = payload.get("payload", "")
+    if not isinstance(title, str) or not isinstance(note, str) or not isinstance(final_payload, str):
+        return jsonify({"error": "invalid fields"}), 400
+    final = {}
+    if title.strip():
+        final["title"] = title.strip()
+    if note.strip():
+        final["note"] = note.strip()
+    if final_payload.strip():
+        final["payload"] = final_payload.strip()
+    with _data_lock:
+        data = load_data()
+        data["final"] = final
+        save_data(data)
+    return jsonify(final)
+
+
+@app.post("/api/admin/solution")
+@limiter.limit("30 per minute")
+@require_admin
+def api_admin_solution():
+    """
+    Update the expected answer for a single field.
+    Body: {"field_id": int, "answer": str}
+    Recomputes `solved` from the current user attempt: solved iff value == new answer.
+    Never touches `value`, `attempts` or `last_attempt_at` (those track the user).
+    """
+    payload = request.get_json(silent=True) or {}
+    fid = payload.get("field_id")
+    answer = payload.get("answer")
+    if not isinstance(fid, int) or not 0 <= fid < NUM_FIELDS:
+        return jsonify({"error": "invalid field_id"}), 400
+    if not isinstance(answer, str):
+        return jsonify({"error": "invalid answer"}), 400
+    spec = FIELD_SPECS[fid]
+    flen = int(spec.get("length", 2))
+    input_type = spec.get("type", "digits")
+    if input_type == "digits":
+        if not answer.isdigit() or not (1 <= len(answer) <= flen):
+            return jsonify({"error": "invalid answer"}), 400
+    else:
+        answer_up = answer.upper() if input_type == "hex" else answer
+        if len(answer_up) != flen or not _matches_type(answer_up, input_type):
+            return jsonify({"error": "invalid answer"}), 400
+        answer = answer_up
+    normalized = _normalize(answer, input_type, flen)
+
+    with _data_lock:
+        data = load_data()
+        f = data["fields"][fid]
+        f["answer"] = normalized
+        value = f.get("value")
+        f["solved"] = bool(value) and value == normalized
+        save_data(data)
+        all_solved = all(x["solved"] for x in data["fields"])
+    return jsonify({
+        "field_id": fid,
+        "answer": normalized,
+        "solved": f["solved"],
+        "all_solved": all_solved,
+    })
+
+
 @app.post("/api/admin/reset")
 @limiter.limit("10 per minute")
 @require_admin
@@ -553,6 +655,8 @@ def api_admin_reset():
         save_data(data)
     _global_locked_until = None
     return jsonify({"reset": True})
+
+
 
 
 if __name__ == "__main__":

@@ -19,6 +19,7 @@ const state = {
     all_solved: false,
     global_locked_until: null,
     message: null,
+    lock_message: null,
 };
 
 const els = {
@@ -73,11 +74,20 @@ function stripZeroPad(v) {
     return String(Number(v));
 }
 
-function copyText(txt) {
+function copyText(btn, txt) {
     if (!txt) return;
+    const original = btn.textContent;
+    const flash = (msg) => {
+        btn.textContent = msg;
+        btn.disabled = true;
+        setTimeout(() => {
+            btn.textContent = original;
+            btn.disabled = false;
+        }, 1500);
+    };
     navigator.clipboard.writeText(txt).then(
-        () => setStatus(t("copied", { value: txt })),
-        () => setStatus(t("copy_failed")),
+        () => flash(t("copied_confirm")),
+        () => flash(t("copy_failed")),
     );
 }
 
@@ -198,14 +208,20 @@ function render() {
     els.globalLock.classList.toggle("visible", gl && showVerdict);
     if (gl && showVerdict) {
         const ms = new Date(state.global_locked_until).getTime() - Date.now();
-        els.globalLock.innerHTML = `<div class="label">${t("come_back_later")}</div><div class="countdown">${fmtCountdown(ms)}</div>`;
+        const lockLabel = state.lock_message || t("come_back_later");
+        els.globalLock.innerHTML = `<div class="label">${lockLabel}</div><div class="countdown">${fmtCountdown(ms)}</div>`;
     } else {
         els.globalLock.innerHTML = "";
     }
     els.submitBtn.disabled = gl;
 
     const won = state.all_solved && showVerdict;
-    els.submitRow.style.display = won ? "none" : "flex";
+    if (won) {
+        els.submitRow.style.display = "none";
+    } else {
+        els.submitRow.style.display = "";
+        els.submitRow.style.visibility = (gl && showVerdict) ? "hidden" : "visible";
+    }
     if (won) revealFinal();
 
     renderStatus();

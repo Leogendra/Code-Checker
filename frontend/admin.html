@@ -23,21 +23,29 @@
         </div>
 
         <div id="panel" class="panel">
-            <div id="global-card" class="global-card">
-                <div class="global-card-info">
-                    <div class="global-card-label" data-translation="global_lock_label">Global lock</div>
-                    <div id="global-status" class="global-card-status"></div>
+            <div class="lock-card">
+                <div id="global-card" class="global-card">
+                    <div class="global-card-info">
+                        <div class="global-card-label" data-translation="global_lock_label">Global lock</div>
+                        <div id="global-status" class="global-card-status"></div>
+                    </div>
+                    <div class="global-card-actions">
+                        <button id="global-lock-btn" data-translation="lock_site">Lock site</button>
+                        <button id="global-unlock-btn" data-translation="unlock_site">Unlock</button>
+                    </div>
                 </div>
-                <div class="global-card-actions">
-                    <button id="global-lock-btn" data-translation="lock_site">Lock site</button>
-                    <button id="global-unlock-btn" data-translation="unlock_site">Unlock</button>
-                </div>
-            </div>
 
-            <div class="duration">
-                <label for="minutes" data-translation="duration">Duration</label>
-                <input id="minutes" type="number" min="0" step="1" placeholder="∞" />
-                <span class="hint" data-translation="minutes_hint">minutes</span>
+                <div class="duration">
+                    <div class="duration-row">
+                        <label for="minutes" data-translation="duration">Duration</label>
+                        <input id="minutes" type="number" min="0" step="1" placeholder="∞" />
+                        <span class="hint" data-translation="minutes_hint">minutes</span>
+                    </div>
+                    <div class="duration-row">
+                        <label for="lock-until" data-translation="lock_until_label">Until</label>
+                        <input id="lock-until" type="datetime-local" />
+                    </div>
+                </div>
             </div>
 
             <div class="message-card">
@@ -53,12 +61,48 @@
                 <div id="msg-current" class="message-current"></div>
             </div>
 
+            <div class="message-card">
+                <label for="lock-msg" data-translation="lock_message_label">Lock message</label>
+                <input id="lock-msg" type="text" maxlength="280" autocomplete="off"
+                    data-translation-placeholder="lock_message_placeholder"
+                    placeholder="Come back later" />
+                <div class="message-row">
+                    <button id="lock-msg-send" data-translation="send">Send</button>
+                    <button id="lock-msg-clear" data-translation="clear">Clear</button>
+                    <span class="hint" data-translation="lock_message_hint">shown on the lock overlay</span>
+                </div>
+                <div id="lock-msg-current" class="message-current"></div>
+            </div>
+
             <div class="bulk">
                 <button id="refresh" data-translation="refresh">Refresh</button>
                 <button id="reset-btn" data-translation="reset_fields">Reset fields</button>
             </div>
 
             <div id="rows" class="rows"></div>
+
+            <div class="final-card">
+                <label data-translation="final_section_label">Final message</label>
+                <div class="final-fields">
+                    <span class="final-field-label" data-translation="final_title_label">Title (bravo)</span>
+                    <input id="final-title" type="text" maxlength="100" autocomplete="off"
+                        data-translation-placeholder="final_title_placeholder"
+                        placeholder="e.g. Bravo" />
+                    <span class="final-field-label" data-translation="final_note_label">Note</span>
+                    <input id="final-note" type="text" maxlength="500" autocomplete="off"
+                        data-translation-placeholder="final_note_placeholder"
+                        placeholder="Message displayed after the title" />
+                    <span class="final-field-label" data-translation="final_payload_label">Payload</span>
+                    <input id="final-payload" type="text" maxlength="500" autocomplete="off"
+                        data-translation-placeholder="final_payload_placeholder"
+                        placeholder="Data to copy" />
+                </div>
+                <div class="message-row">
+                    <button id="final-save" data-translation="save">Save</button>
+                </div>
+                <div id="final-current" class="message-current"></div>
+            </div>
+
             <div id="msg" class="msg"></div>
         </div>
     </div>

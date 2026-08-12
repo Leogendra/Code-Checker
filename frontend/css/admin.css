@@ -61,10 +61,10 @@
 
 .row {
     display: grid;
-    grid-template-columns: 32px 1fr auto auto;
+    grid-template-columns: 26px 56px minmax(60px, 1fr) auto auto auto;
     align-items: center;
-    gap: 12px;
-    padding: 10px 14px;
+    gap: 8px;
+    padding: 8px 12px;
     background: var(--glass-bg);
     border: 1px solid var(--glass-border);
     border-radius: 10px;
@@ -72,31 +72,55 @@
     -webkit-backdrop-filter: blur(12px);
 }
 
-.row .fid {
-    color: var(--muted);
-    font-size: 0.85rem;
-}
-
 .row .status {
-    font-size: 0.8rem;
-    color: var(--muted);
-    letter-spacing: 0.03em;
-    font-variant-numeric: tabular-nums;
+    font-size: 1.05rem;
+    text-align: center;
+    line-height: 1;
 }
 
-.row.solved .status {
+.row .last-attempt {
+    font-size: 0.85rem;
+    color: var(--muted);
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.row.solved .last-attempt {
     color: var(--ok);
 }
 
-.row.locked .status {
+.row.wrong .last-attempt {
     color: var(--ko);
 }
 
+.row .solution-input {
+    height: 30px;
+    padding: 0 8px;
+    background: transparent;
+    color: var(--text);
+    border: 1px solid var(--glass-border);
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-family: inherit;
+    outline: none;
+    min-width: 0;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.row .solution-input:focus {
+    border-color: var(--glass-border-strong);
+}
+
 .row button {
-    padding: 8px 14px;
+    padding: 6px 10px;
     font-size: 0.7rem;
-    letter-spacing: 0.1em;
-    min-width: 90px;
+    letter-spacing: 0.05em;
+    min-width: 0;
 }
 
 .bulk {
@@ -107,13 +131,11 @@
     flex-wrap: wrap;
 }
 
-.global-card {
+.lock-card {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 16px;
-    flex-wrap: wrap;
-    padding: 16px 20px;
+    flex-direction: column;
+    gap: 14px;
+    padding: 14px 18px;
     background: var(--glass-bg);
     border: 1px solid var(--glass-border);
     border-radius: 10px;
@@ -121,8 +143,16 @@
     -webkit-backdrop-filter: blur(12px);
 }
 
-.global-card.locked {
+.lock-card:has(.global-card.locked) {
     border-color: rgba(248, 113, 113, 0.35);
+}
+
+.global-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
 }
 
 .global-card-label {
@@ -161,14 +191,14 @@
 
 .duration {
     display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.duration-row {
+    display: flex;
     align-items: center;
     gap: 8px;
-    padding: 6px 12px;
-    background: var(--glass-bg);
-    border: 1px solid var(--glass-border);
-    border-radius: 10px;
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
 }
 
 .duration label {
@@ -176,10 +206,10 @@
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--muted);
+    min-width: 52px;
 }
 
 .duration input {
-    width: 70px;
     height: 30px;
     padding: 0 8px;
     background: transparent;
@@ -189,6 +219,17 @@
     font-size: 0.85rem;
     outline: none;
     text-align: center;
+}
+
+.duration input[type="number"] {
+    width: 70px;
+}
+
+.duration input[type="datetime-local"] {
+    width: auto;
+    flex: 1;
+    text-align: left;
+    color-scheme: dark;
 }
 
 .duration input:focus {
@@ -253,6 +294,56 @@
     color: var(--muted);
     min-height: 14px;
     word-break: break-word;
+}
+
+.final-card {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px 18px;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: 10px;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+
+.final-card > label {
+    font-size: 0.7rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+
+.final-fields {
+    display: grid;
+    grid-template-columns: 100px 1fr;
+    align-items: center;
+    gap: 8px 12px;
+}
+
+.final-field-label {
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    text-align: right;
+    white-space: nowrap;
+}
+
+.final-fields input {
+    height: 38px;
+    padding: 0 12px;
+    background: transparent;
+    color: var(--text);
+    border: 1px solid var(--glass-border);
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-family: inherit;
+    outline: none;
+}
+
+.final-fields input:focus {
+    border-color: var(--glass-border-strong);
 }
 
 .msg {

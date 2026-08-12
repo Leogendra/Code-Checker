@@ -1,5 +1,3 @@
-const PERMANENT_LOCK = "9999-12-31T00:00:00+00:00";
-
 const els = {
     login: document.getElementById("login"),
     pwd: document.getElementById("pwd"),
@@ -19,14 +17,32 @@ const els = {
     globalStatus: document.getElementById("global-status"),
     globalLockBtn: document.getElementById("global-lock-btn"),
     globalUnlockBtn: document.getElementById("global-unlock-btn"),
+    finalTitle: document.getElementById("final-title"),
+    finalNote: document.getElementById("final-note"),
+    finalPayload: document.getElementById("final-payload"),
+    finalSave: document.getElementById("final-save"),
+    finalCurrent: document.getElementById("final-current"),
+    lockUntil: document.getElementById("lock-until"),
+    lockMsgInput: document.getElementById("lock-msg"),
+    lockMsgSend: document.getElementById("lock-msg-send"),
+    lockMsgClear: document.getElementById("lock-msg-clear"),
+    lockMsgCurrent: document.getElementById("lock-msg-current"),
 };
 
-function getMinutes() {
+function getLockDuration() {
+    if (els.lockUntil.value) {
+        const target = new Date(els.lockUntil.value);
+        const diffMs = target.getTime() - Date.now();
+        if (diffMs > 0) {
+            return { minutes: diffMs / 60000, label: target.toLocaleString() };
+        }
+    }
     const raw = els.minutes.value.trim();
-    if (raw === "") return null;
-    const n = Number(raw);
-    if (!isFinite(n) || n <= 0) return null;
-    return n;
+    if (raw !== "") {
+        const n = Number(raw);
+        if (isFinite(n) && n > 0) return { minutes: n, label: n + "min" };
+    }
+    return { minutes: null, label: t("permanent") };
 }
 
 function getToken() {
@@ -80,21 +96,13 @@ function setMsg(text, isErr) {
     els.msg.classList.toggle("err", !!isErr);
 }
 
-function formatLock(f) {
-    if (f.solved) return t("solved");
-    if (!f.locked_until) return t("free");
-    if (f.permanent || f.locked_until === PERMANENT_LOCK) return t("locked_permanent");
-    const timeMs = new Date(f.locked_until).getTime();
-    const now = Date.now();
-    if (timeMs <= now) return t("free");
-    const s = Math.floor((timeMs - now) / 1000);
-    const h = Math.floor(s / 3600);
-    const m = Math.floor((s % 3600) / 60);
-    const sec = s % 60;
-    const pad = (n) => String(n).padStart(2, "0");
-    const cd = h > 0 ? `${h}h${pad(m)}` : `${m}:${pad(sec)}`;
-    return t("locked_with_countdown", { cd });
+function fieldStatus(f) {
+    if (f.solved) return "solved";
+    if (f.value) return "wrong";
+    return "waiting";
 }
+
+const STATUS_EMOJI = { solved: "✅", wrong: "❌", waiting: "🕛" };
 
 let _globalUntil = null;
 
@@ -125,23 +133,35 @@ function renderGlobal(data) {
 }
 
 function renderRows(data) {
+    // Avoid clobbering an in-progress edit inside a row (solution input, etc.).
+    if (els.rows.contains(document.activeElement)) return;
     els.rows.innerHTML = "";
     data.fields.forEach((f) => {
         const row = document.createElement("div");
-        row.className = "row";
-        if (f.solved) row.classList.add("solved");
-        else if (f.locked_until) {
-            const timeMs = new Date(f.locked_until).getTime();
-            if (f.permanent || timeMs > Date.now()) row.classList.add("locked");
-        }
-
-        const fid = document.createElement("div");
-        fid.className = "fid";
-        fid.textContent = "#" + f.id;
+        const st = fieldStatus(f);
+        row.className = "row " + st;
 
         const status = document.createElement("div");
         status.className = "status";
-        status.textContent = formatLock(f);
+        status.textContent = STATUS_EMOJI[st];
+
+        const lastAttempt = document.createElement("div");
+        lastAttempt.className = "last-attempt";
+        lastAttempt.textContent = st === "waiting" ? "" : (f.value || "");
+
+        const solutionInput = document.createElement("input");
+        solutionInput.type = "text";
+        solutionInput.className = "solution-input";
+        solutionInput.value = f.answer || "";
+        solutionInput.autocomplete = "off";
+        solutionInput.spellcheck = false;
+
+        const saveBtn = document.createElement("button");
+        saveBtn.textContent = t("validate");
+        saveBtn.addEventListener("click", () => saveSolution(f.id, solutionInput.value));
+        solutionInput.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") saveSolution(f.id, solutionInput.value);
+        });
 
         const lockBtn = document.createElement("button");
         lockBtn.textContent = t("lock_btn");
@@ -153,14 +173,27 @@ function renderRows(data) {
         unlockBtn.disabled = f.solved || !f.locked_until;
         unlockBtn.addEventListener("click", () => unlockFields([f.id]));
 
-        row.append(fid, status, lockBtn, unlockBtn);
+        row.append(status, lastAttempt, solutionInput, saveBtn, lockBtn, unlockBtn);
         els.rows.appendChild(row);
     });
 }
 
+async function saveSolution(fid, answer) {
+    const trimmed = (answer || "").trim();
+    if (!trimmed) return;
+    try {
+        await api("POST", "/api/admin/solution", { field_id: fid, answer: trimmed });
+        setMsg(t("solution_saved", { id: fid }));
+        // Drop focus so renderRows can safely rebuild the row (see renderRows guard).
+        if (els.rows.contains(document.activeElement)) document.activeElement.blur();
+        await refresh();
+    } catch (e) {
+        if (e.message !== "unauthorized") setMsg(t("error", { msg: e.message }), true);
+    }
+}
+
 function renderMessage(msg) {
     els.msgCurrent.textContent = msg ? t("message_shown", { msg }) : t("no_message_shown");
-    // Do not overwrite ongoing user input (refresh runs every 15s).
     if (document.activeElement !== els.msgInput) els.msgInput.value = msg || "";
 }
 
@@ -174,12 +207,58 @@ async function sendMessage(text) {
     }
 }
 
+function renderLockMessage(msg) {
+    els.lockMsgCurrent.textContent = msg ? t("lock_message_shown", { msg }) : t("no_lock_message_shown");
+    if (document.activeElement !== els.lockMsgInput) els.lockMsgInput.value = msg || "";
+}
+
+async function sendLockMessage(text) {
+    try {
+        const data = await api("POST", "/api/admin/lock-message", { message: text });
+        renderLockMessage(data.lock_message);
+        setMsg(data.lock_message ? t("lock_message_published") : t("lock_message_cleared"));
+    } catch (e) {
+        if (e.message !== "unauthorized") setMsg(t("error", { msg: e.message }), true);
+    }
+}
+
+function renderFinalCard(data) {
+    const title = data.title || "";
+    const note = data.note || "";
+    const payload = data.payload || "";
+    els.finalCurrent.textContent = payload
+        ? t("final_shown", { payload })
+        : t("final_no_payload");
+    if (document.activeElement !== els.finalTitle) els.finalTitle.value = title;
+    if (document.activeElement !== els.finalNote) els.finalNote.value = note;
+    if (document.activeElement !== els.finalPayload) els.finalPayload.value = payload;
+}
+
+async function saveFinal() {
+    try {
+        const data = await api("POST", "/api/admin/final", {
+            title: els.finalTitle.value.trim(),
+            note: els.finalNote.value.trim(),
+            payload: els.finalPayload.value.trim(),
+        });
+        renderFinalCard(data);
+        setMsg(t("final_saved"));
+    } catch (e) {
+        if (e.message !== "unauthorized") setMsg(t("error", { msg: e.message }), true);
+    }
+}
+
 async function refresh() {
     try {
-        const data = await api("GET", "/api/admin/state");
-        renderGlobal(data);
-        renderRows(data);
-        renderMessage(data.message);
+        const [stateData, finalData] = await Promise.all([
+            api("GET", "/api/admin/state"),
+            api("GET", "/api/admin/final"),
+        ]);
+        renderGlobal(stateData);
+        renderRows(stateData);
+        renderMessage(stateData.message);
+        renderLockMessage(stateData.lock_message);
+        renderFinalCard(finalData);
         setMsg("");
     } catch (e) {
         if (e.message !== "unauthorized") setMsg(t("error", { msg: e.message }), true);
@@ -187,10 +266,9 @@ async function refresh() {
 }
 
 async function globalLock() {
-    const minutes = getMinutes();
+    const { minutes, label } = getLockDuration();
     try {
         await api("POST", "/api/admin/global-lock", { minutes });
-        const label = minutes ? minutes + "min" : t("permanent");
         setMsg(t("site_locked", { label }));
         await refresh();
     } catch (e) {
@@ -220,10 +298,9 @@ async function resetFields() {
 }
 
 async function lockFields(ids) {
-    const minutes = getMinutes();
+    const { minutes, label } = getLockDuration();
     try {
         await api("POST", "/api/admin/lock", { field_ids: ids, minutes });
-        const label = minutes ? `${minutes}min` : t("permanent");
         setMsg(t("locked_result", { label, ids: ids.join(", ") }));
         await refresh();
     } catch (e) {
@@ -271,12 +348,28 @@ els.msgClear.addEventListener("click", () => { els.msgInput.value = ""; sendMess
 els.msgInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") sendMessage(els.msgInput.value.trim());
 });
+els.lockMsgSend.addEventListener("click", () => sendLockMessage(els.lockMsgInput.value.trim()));
+els.lockMsgClear.addEventListener("click", () => { els.lockMsgInput.value = ""; sendLockMessage(""); });
+els.lockMsgInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") sendLockMessage(els.lockMsgInput.value.trim());
+});
+els.finalSave.addEventListener("click", saveFinal);
 
 loadLanguage();
 
 if (getToken()) {
-    api("GET", "/api/admin/state").then(
-        (data) => { showPanel(); renderGlobal(data); renderRows(data); renderMessage(data.message); },
+    Promise.all([
+        api("GET", "/api/admin/state"),
+        api("GET", "/api/admin/final"),
+    ]).then(
+        ([stateData, finalData]) => {
+            showPanel();
+            renderGlobal(stateData);
+            renderRows(stateData);
+            renderMessage(stateData.message);
+            renderLockMessage(stateData.lock_message);
+            renderFinalCard(finalData);
+        },
         () => { /* showLogin was already called on 401 */ }
     );
 } else {
