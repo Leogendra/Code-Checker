@@ -74,11 +74,20 @@ function stripZeroPad(v) {
     return String(Number(v));
 }
 
-function copyText(txt) {
+function copyText(btn, txt) {
     if (!txt) return;
+    const original = btn.textContent;
+    const flash = (msg) => {
+        btn.textContent = msg;
+        btn.disabled = true;
+        setTimeout(() => {
+            btn.textContent = original;
+            btn.disabled = false;
+        }, 1500);
+    };
     navigator.clipboard.writeText(txt).then(
-        () => setStatus(t("copied", { value: txt })),
-        () => setStatus(t("copy_failed")),
+        () => flash(t("copied_confirm")),
+        () => flash(t("copy_failed")),
     );
 }
 
@@ -207,7 +216,12 @@ function render() {
     els.submitBtn.disabled = gl;
 
     const won = state.all_solved && showVerdict;
-    els.submitRow.style.visibility = (won || (gl && showVerdict)) ? "hidden" : "visible";
+    if (won) {
+        els.submitRow.style.display = "none";
+    } else {
+        els.submitRow.style.display = "";
+        els.submitRow.style.visibility = (gl && showVerdict) ? "hidden" : "visible";
+    }
     if (won) revealFinal();
 
     renderStatus();

@@ -144,7 +144,7 @@ function renderFinal(data) {
     if (data.payload) {
         const copy = document.createElement("button");
         copy.textContent = t("copy");
-        copy.addEventListener("click", () => copyText(data.payload));
+        copy.addEventListener("click", () => copyText(copy, data.payload));
         row.appendChild(copy);
     }
 
@@ -152,7 +152,7 @@ function renderFinal(data) {
         if (action.type === "copy") {
             const btn = document.createElement("button");
             btn.textContent = action.label || t("copy");
-            btn.addEventListener("click", () => copyText(action.value || data.payload || ""));
+            btn.addEventListener("click", () => copyText(btn, action.value || data.payload || ""));
             row.appendChild(btn);
         } else if (action.type === "link" && action.href) {
             const a = document.createElement("a");
