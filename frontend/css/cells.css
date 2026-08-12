@@ -83,10 +83,8 @@
     box-shadow: 0 0 0 1px rgba(125, 211, 252, 0.18), 0 0 16px rgba(125, 211, 252, 0.28);
 }
 
-/* Placed above the fields (JS adjusts `left` to center on the group). */
 .group-tip {
     position: absolute;
-    bottom: calc(100% + 14px);
     transform: translateX(-50%);
     white-space: nowrap;
     padding: 8px 14px;
@@ -136,7 +134,7 @@
     z-index: 0;
 }
 
-.lock-fx > * {
+.lock-fx>* {
     position: absolute;
     width: 100%;
     aspect-ratio: 1 / 1;
