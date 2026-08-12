@@ -231,7 +231,7 @@ function formatMinutes(minutes) {
     if (n < 60) return `${n} min`;
     const h = Math.floor(n / 60);
     const m = Math.round(n % 60);
-    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+    return `${String(h).padStart(2, "0")}h${String(m).padStart(2, "0")}m`;
 }
 
 function renderFailLock(minutes) {

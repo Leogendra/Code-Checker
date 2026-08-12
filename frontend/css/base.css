@@ -8,8 +8,7 @@
     --accent: #5e5c6a;
     --ok: #4ade80;
     --ko: #f87171;
-    /* Group indicator: deliberately neither green nor red so it doesn't
-       clash with the solved / locked states. */
+    /* Group indicator */
     --hl: #7dd3fc;
     --hl-border: rgba(125, 211, 252, 0.4);
 }
@@ -23,7 +22,6 @@ html, body {
     padding: 0;
     min-height: 100vh;
 }
-
 
 @font-face {
   font-family: "Merkur";

@@ -223,6 +223,7 @@ function render() {
         els.submitRow.style.visibility = (gl && showVerdict) ? "hidden" : "visible";
     }
     if (won) revealFinal();
+    else if (!state.all_solved && finalState === "done") hideFinal();
 
     renderStatus();
 }
